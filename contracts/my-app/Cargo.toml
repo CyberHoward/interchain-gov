@@ -53,6 +53,7 @@ schemars = { workspace = true }
 cw-asset = { workspace = true }
 abstract-app = { workspace = true }
 const_format = { workspace = true }
+serde = "1"
 
 # Dependencies for interface
 cw-orch = { workspace = true }

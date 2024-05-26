@@ -4,6 +4,7 @@ mod handlers;
 pub mod msg;
 mod replies;
 pub mod state;
+mod data;
 
 pub use error::MyAppError;
 
