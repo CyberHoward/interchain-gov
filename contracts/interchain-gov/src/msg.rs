@@ -1,13 +1,15 @@
-use crate::contract::Intersync;
+use crate::contract::InterchainGov;
 
+use abstract_adapter::objects::AccountId;
 use cosmwasm_schema::QueryResponses;
 
 // This is used for type safety and re-exporting the contract endpoint structs.
-abstract_app::app_msg_types!(Intersync, IntersyncExecuteMsg, IntersyncQueryMsg);
+abstract_adapter::adapter_msg_types!(InterchainGov, InterchainGovExecuteMsg, InterchainGovQueryMsg);
+use crate::{state::Proposal};
 
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
-pub struct IntersyncInstantiateMsg {
+pub struct InterchainGovInstantiateMsg {
     pub count: i32,
 }
 
@@ -15,29 +17,30 @@ pub struct IntersyncInstantiateMsg {
 #[cosmwasm_schema::cw_serde]
 #[derive(cw_orch::ExecuteFns)]
 #[impl_into(ExecuteMsg)]
-pub enum IntersyncExecuteMsg {
+pub enum InterchainGovExecuteMsg {
     /// Called by gov when a chain wants to create a proposal
     CreateProposal {
-
+        proposal: Proposal,
     },
     /// Can be called by any chain to trigger tallying
     TallyProposal {
-    
+        prop_hash: String,
     },
     ///Called by gov to vote on a proposal
     VoteProposal {
-
+        prop_hash: String,
+        vote: bool,
     }
 }
 
 #[cosmwasm_schema::cw_serde]
-pub struct IntersyncMigrateMsg {}
+pub struct InterchainGovMigrateMsg {}
 
 /// App query messages
 #[cosmwasm_schema::cw_serde]
 #[derive(QueryResponses, cw_orch::QueryFns)]
 #[impl_into(QueryMsg)]
-pub enum IntersyncQueryMsg {
+pub enum InterchainGovQueryMsg {
     #[returns(ConfigResponse)]
     Config {},
     #[returns(CountResponse)]

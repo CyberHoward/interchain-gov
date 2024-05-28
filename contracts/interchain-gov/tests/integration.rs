@@ -1,7 +1,7 @@
-use my_adapter::{
-    contract::interface::MyAdapterInterface,
-    msg::{ConfigResponse, ExecuteMsg, MyAdapterInstantiateMsg, MyAdapterQueryMsgFns},
-    MyAdapterExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
+use interchain_gov::{
+    contract::interface::InterchainGovInterface,
+    msg::{ConfigResponse, ExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
+    InterchainGovExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
 };
 
 use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
@@ -13,7 +13,7 @@ use cw_orch::{anyhow, prelude::*};
 struct TestEnv<Env: CwEnv> {
     publisher: Publisher<Env>,
     abs: AbstractClient<Env>,
-    adapter: Application<Env, MyAdapterInterface<Env>>,
+    adapter: Application<Env, InterchainGovInterface<Env>>,
 }
 
 impl TestEnv<MockBech32> {
@@ -32,13 +32,13 @@ impl TestEnv<MockBech32> {
 
         // Publish the adapter
         let publisher = abs_client.publisher_builder(namespace).build()?;
-        publisher.publish_adapter::<MyAdapterInstantiateMsg, MyAdapterInterface<_>>(
-            MyAdapterInstantiateMsg {},
+        publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<_>>(
+            InterchainGovInstantiateMsg {},
         )?;
 
         let adapter = publisher
             .account()
-            .install_adapter::<MyAdapterInterface<_>>(&[])?;
+            .install_adapter::<InterchainGovInterface<_>>(&[])?;
 
         Ok(TestEnv {
             abs: abs_client,
@@ -73,14 +73,14 @@ fn update_config() -> anyhow::Result<()> {
     adapter.execute(
         &AdapterRequestMsg {
             proxy_address: Some(publisher_account.account().proxy()?.to_string()),
-            request: MyAdapterExecuteMsg::UpdateConfig {},
+            request: InterchainGovExecuteMsg::UpdateConfig {},
         }
         .into(),
         None,
     )?;
 
     let config = adapter.config()?;
-    let expected_response = my_adapter::msg::ConfigResponse {};
+    let expected_response = interchain_gov::msg::ConfigResponse {};
     assert_eq!(config, expected_response);
 
     // Adapter installed on sub-account of the publisher so this should error
@@ -88,7 +88,7 @@ fn update_config() -> anyhow::Result<()> {
         .execute(
             &AdapterRequestMsg {
                 proxy_address: Some(adapter.account().proxy()?.to_string()),
-                request: MyAdapterExecuteMsg::UpdateConfig {},
+                request: InterchainGovExecuteMsg::UpdateConfig {},
             }
             .into(),
             None,
@@ -113,7 +113,7 @@ fn set_status() -> anyhow::Result<()> {
         MY_ADAPTER_ID,
         ExecuteMsg::Module(AdapterRequestMsg {
             proxy_address: Some(subaccount.proxy()?.to_string()),
-            request: MyAdapterExecuteMsg::SetStatus {
+            request: InterchainGovExecuteMsg::SetStatus {
                 status: first_status.clone(),
             },
         }),
@@ -122,14 +122,14 @@ fn set_status() -> anyhow::Result<()> {
     let new_account = env
         .abs
         .account_builder()
-        .install_adapter::<MyAdapterInterface<MockBech32>>()?
+        .install_adapter::<InterchainGovInterface<MockBech32>>()?
         .build()?;
 
     new_account.as_ref().manager.execute_on_module(
         MY_ADAPTER_ID,
         ExecuteMsg::Module(AdapterRequestMsg {
             proxy_address: Some(new_account.proxy()?.to_string()),
-            request: MyAdapterExecuteMsg::SetStatus {
+            request: InterchainGovExecuteMsg::SetStatus {
                 status: second_status.clone(),
             },
         }),

@@ -1,5 +1,5 @@
 use crate::{
-    msg::{MyAdapterExecuteMsg, MyAdapterQueryMsg},
+    msg::{InterchainGovExecuteMsg, InterchainGovQueryMsg},
     MY_ADAPTER_ID,
 };
 
@@ -13,10 +13,10 @@ use cosmwasm_std::{CosmosMsg, Deps, Uint128};
 
 // API for Abstract SDK users
 /// Interact with your adapter in other modules.
-pub trait MyAdapterApi: AccountIdentification + Dependencies + ModuleIdentification {
+pub trait InterchainGovApi: AccountIdentification + Dependencies + ModuleIdentification {
     /// Construct a new adapter interface.
-    fn my_adapter<'a>(&'a self, deps: Deps<'a>) -> MyAdapter<Self> {
-        MyAdapter {
+    fn interchain_gov<'a>(&'a self, deps: Deps<'a>) -> InterchainGov<Self> {
+        InterchainGov {
             base: self,
             deps,
             module_id: MY_ADAPTER_ID,
@@ -24,16 +24,16 @@ pub trait MyAdapterApi: AccountIdentification + Dependencies + ModuleIdentificat
     }
 }
 
-impl<T: AccountIdentification + Dependencies + ModuleIdentification> MyAdapterApi for T {}
+impl<T: AccountIdentification + Dependencies + ModuleIdentification> InterchainGovApi for T {}
 
 #[derive(Clone)]
-pub struct MyAdapter<'a, T: MyAdapterApi> {
+pub struct InterchainGov<'a, T: InterchainGovApi> {
     pub base: &'a T,
     pub module_id: ModuleId<'a>,
     pub deps: Deps<'a>,
 }
 
-impl<'a, T: MyAdapterApi> MyAdapter<'a, T> {
+impl<'a, T: InterchainGovApi> InterchainGov<'a, T> {
     /// Set the module id
     pub fn with_module_id(self, module_id: ModuleId<'a>) -> Self {
         Self { module_id, ..self }
@@ -44,29 +44,24 @@ impl<'a, T: MyAdapterApi> MyAdapter<'a, T> {
         self.module_id
     }
 
-    /// Executes a [MyAdapterExecuteMsg] in the adapter
-    fn request(&self, msg: MyAdapterExecuteMsg) -> AbstractSdkResult<CosmosMsg> {
+    /// Executes a [InterchainGovExecuteMsg] in the adapter
+    fn request(&self, msg: InterchainGovExecuteMsg) -> AbstractSdkResult<CosmosMsg> {
         let adapters = self.base.adapters(self.deps);
 
         adapters.execute(self.module_id(), msg)
     }
-
-    /// Route message
-    pub fn update_config(&self) -> AbstractSdkResult<CosmosMsg> {
-        self.request(MyAdapterExecuteMsg::UpdateConfig {})
-    }
 }
 
 /// Queries
-impl<'a, T: MyAdapterApi> MyAdapter<'a, T> {
+impl<'a, T: InterchainGovApi> InterchainGov<'a, T> {
     /// Query your adapter via message type
-    pub fn query<R: DeserializeOwned>(&self, query_msg: MyAdapterQueryMsg) -> AbstractSdkResult<R> {
+    pub fn query<R: DeserializeOwned>(&self, query_msg: InterchainGovQueryMsg) -> AbstractSdkResult<R> {
         let adapters = self.base.adapters(self.deps);
         adapters.query(self.module_id(), query_msg)
     }
 
     /// Query config
     pub fn config(&self) -> AbstractSdkResult<Uint128> {
-        self.query(MyAdapterQueryMsg::Config {})
+        self.query(InterchainGovQueryMsg::Config {})
     }
 }

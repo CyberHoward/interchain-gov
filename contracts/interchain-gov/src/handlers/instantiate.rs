@@ -1,6 +1,6 @@
 use crate::{
-    contract::{AdapterResult, MyAdapter},
-    msg::MyAdapterInstantiateMsg,
+    contract::{AdapterResult, InterchainGov},
+    msg::InterchainGovInstantiateMsg,
     state::{Config, CONFIG},
 };
 
@@ -10,8 +10,8 @@ pub fn instantiate_handler(
     deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
-    _adapter: MyAdapter,
-    _msg: MyAdapterInstantiateMsg,
+    _adapter: InterchainGov,
+    _msg: InterchainGovInstantiateMsg,
 ) -> AdapterResult {
     let config: Config = Config {};
 

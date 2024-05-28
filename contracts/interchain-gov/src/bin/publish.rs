@@ -7,8 +7,8 @@
 //! ```bash
 //! $ just publish uni-6 osmo-test-5
 //! ```
-use my_adapter::{
-    contract::interface::MyAdapterInterface, msg::MyAdapterInstantiateMsg, MY_ADAPTER_ID,
+use interchain_gov::{
+    contract::interface::InterchainGovInterface, msg::InterchainGovInstantiateMsg, MY_ADAPTER_ID,
 };
 
 use abstract_adapter::objects::namespace::Namespace;
@@ -41,8 +41,8 @@ fn publish(networks: Vec<ChainInfo>) -> anyhow::Result<()> {
         }
 
         // Publish the Adapter to the Abstract Platform
-        publisher.publish_adapter::<MyAdapterInstantiateMsg, MyAdapterInterface<Daemon>>(
-            MyAdapterInstantiateMsg {},
+        publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<Daemon>>(
+            InterchainGovInstantiateMsg {},
         )?;
     }
     Ok(())

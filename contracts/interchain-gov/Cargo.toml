@@ -1,5 +1,5 @@
 [package]
-name = "intersync"
+name = "interchain-gov"
 version = "0.0.1"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
@@ -41,7 +41,7 @@ daemon-bin = [
   "dep:dotenv",
   "dep:env_logger",
 ]
-schema = ["abstract-app/schema"]
+schema = ["abstract-adapter/schema"]
 
 [dependencies]
 cosmwasm-std = { workspace = true }
@@ -51,12 +51,12 @@ cw-storage-plus = { workspace = true }
 thiserror = { workspace = true }
 schemars = { workspace = true }
 cw-asset = { workspace = true }
-abstract-app = { workspace = true }
+abstract-adapter = { workspace = true }
 const_format = { workspace = true }
+
 serde = "1"
 cw-utils = "1.0.3"
 dao-voting = "2.3.0"
-
 
 # Dependencies for interface
 cw-orch = { workspace = true }
@@ -69,6 +69,6 @@ dotenv = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 
 [dev-dependencies]
-intersync = { workspace = true }
+interchain-gov = { workspace = true }
 abstract-client = { workspace = true }
-abstract-app = { workspace = true, features = ["test-utils"] }
+abstract-adapter = { workspace = true, features = ["test-utils"] }

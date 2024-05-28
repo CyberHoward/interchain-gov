@@ -1,5 +1,5 @@
 use cosmwasm_schema::remove_schemas;
-use intersync::contract::Intersync;
+use interchain_gov::contract::InterchainGov;
 use std::env::current_dir;
 use std::fs::create_dir_all;
 
@@ -10,5 +10,5 @@ fn main() {
     remove_schemas(&out_dir).unwrap();
 
     #[cfg(feature = "schema")]
-    Intersync::export_schema(&out_dir);
+    InterchainGov::export_schema(&out_dir);
 }

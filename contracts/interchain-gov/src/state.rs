@@ -1,8 +1,9 @@
+use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Binary, CosmosMsg, Empty, Uint128};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
-use dao_voting::{threshold::Threshold, voting::Votes};
+use dao_voting::{status::Status, threshold::Threshold, voting::Votes};
 
 #[cosmwasm_schema::cw_serde]
 pub struct Config {}
@@ -10,19 +11,21 @@ pub struct Config {}
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const COUNT: Item<i32> = Item::new("count");
 
-pub const DATA: Map<String, (Status, Binary)> = Map::new("gov_data");
-pub const ITEM: Item<Members> = Item::new("members");
+pub const PROPS: Map<String, (DataStatus, Binary)> = Map::new("props");
+pub const MEMBERS: Item<Members> = Item::new("members");
+pub const LOCAL_VOTE: Item<Vote> = Item::new("local_vote");
 
+/// Different statuses for a data item
 #[cw_serde]
-pub enum Status {
+pub enum DataStatus {
     Initiate = 0,
-    Stable = 1,
-    Locked = 2,
+    Proposed = 1,
+    Finalized = 2,
 }
 
 #[cw_serde]
 pub struct Members {
-    pub status: Status,
+    pub status: DataStatus,
     pub members: Vec<String>,
 }
 
@@ -35,10 +38,8 @@ pub struct Proposal {
     pub description: String,
     /// The address that created this proposal.
     pub proposer: String,
-    /// The block height at which this proposal was created. Voting
-    /// power queries should query for voting power at this block
-    /// height.
-    pub start_height: u64,
+    /// The chain that created this proposal
+    pub proposer_chain: ChainName,
     /// The minimum amount of time this proposal must remain open for
     /// voting. The proposal may not pass unless this is expired or
     /// None.
@@ -46,18 +47,6 @@ pub struct Proposal {
     /// The the time at which this proposal will expire and close for
     /// additional votes.
     pub expiration: Expiration,
-    /// The threshold at which this proposal will pass.
-    pub threshold: Threshold,
-    /// The total amount of voting power at the time of this
-    /// proposal's creation.
-    pub total_power: Uint128,
-    /// The messages that will be executed should this proposal pass.
-    pub msgs: Vec<CosmosMsg<Empty>>,
     /// The proposal status
     pub status: Status,
-    /// Votes on a particular proposal
-    pub votes: Votes,
-    /// Whether or not revoting is enabled. If revoting is enabled, a proposal
-    /// cannot pass until the voting period has elapsed.
-    pub allow_revoting: bool,
 }

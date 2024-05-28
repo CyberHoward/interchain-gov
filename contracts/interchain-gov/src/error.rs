@@ -1,13 +1,11 @@
-use abstract_app::sdk::AbstractSdkError;
-use abstract_app::std::AbstractError;
-use abstract_app::AppError;
+use abstract_adapter::{sdk::AbstractSdkError, std::AbstractError, AdapterError};
 use cosmwasm_std::StdError;
 use cw_asset::AssetError;
 use cw_controllers::AdminError;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
-pub enum IntersyncError {
+pub enum InterchainGovError {
     #[error("{0}")]
     Std(#[from] StdError),
 
@@ -24,5 +22,11 @@ pub enum IntersyncError {
     Admin(#[from] AdminError),
 
     #[error("{0}")]
-    DappError(#[from] AppError),
+    AdapterError(#[from] AdapterError),
+
+    #[error("{0} are not implemented")]
+    NotImplemented(String),
+
+    #[error("Unauthorized")]
+    Unauthorized {},
 }
