@@ -1,13 +1,24 @@
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Binary, CosmosMsg, Empty, Uint128};
+use cosmwasm_std::{Addr, Binary, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
-use dao_voting::{status::Status, threshold::Threshold, voting::Votes};
+use dao_voting::{status::Status};
 
-pub const PROPS: Map<String, (DataStatus, Binary)> = Map::new("props");
-pub const MEMBERS: Item<Members> = Item::new("members");
-pub const LOCAL_VOTE: Map<u32, Vote> = Item::new("local_vote");
+
+pub type ProposalId = u32;
+
+pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("our_vote");
+
+pub const PROPS: Map<ProposalId, (DataStatus, Binary)> = Map::new("props");
+
+
+/// Local members to local data status
+pub const MEMBERS: Item<(Members, DataStatus)> = Item::new("members");
+/// Remote member statuses
+pub const MEMBER_UPDATES: Map<ChainName, DataStatus> = Map::new("member_updates");
+
+// Mabye we should do Map<Key, DataStatus>
 
 /// Different statuses for a data item
 #[cw_serde]
@@ -19,7 +30,30 @@ pub enum DataStatus {
 
 #[cw_serde]
 pub struct Members {
-    pub members: Vec<String>,
+    pub members: Vec<ChainName>,
+}
+
+impl Members {
+    pub fn new(env: &Env) -> Self {
+        Members {
+            members: vec![ChainName::new(env)]
+        }
+    }
+}
+
+#[cw_serde]
+pub struct ProposalMsg {
+    /// The title of the proposal
+    pub title: String,
+    /// The main body of the proposal text
+    pub description: String,
+    /// The minimum amount of time this proposal must remain open for
+    /// voting. The proposal may not pass unless this is expired or
+    /// None.
+    pub min_voting_period: Option<Expiration>,
+    /// The the time at which this proposal will expire and close for
+    /// additional votes.
+    pub expiration: Expiration,
 }
 
 // https://github.com/DA0-DA0/dao-contracts/blob/development/contracts/proposal/dao-proposal-single/src/proposal.rs
@@ -30,6 +64,7 @@ pub struct Proposal {
     /// The main body of the proposal text
     pub description: String,
     /// The address that created this proposal.
+    /// Needs to be a string to be translatable.
     pub proposer: String,
     /// The chain that created this proposal
     pub proposer_chain: ChainName,
@@ -44,8 +79,22 @@ pub struct Proposal {
     pub status: Status,
 }
 
+impl Proposal {
+    pub fn new(proposal: ProposalMsg, proposer: &Addr, env: &Env) -> Self {
+        Proposal {
+            title: proposal.title,
+            description: proposal.description,
+            proposer: proposer.to_string(),
+            proposer_chain: ChainName::new(env),
+            min_voting_period: proposal.min_voting_period,
+            expiration: proposal.expiration,
+            status: Status::Open
+        }
+    }
+}
+
 #[cw_serde]
-enum Vote {
+pub enum Vote {
     Yes,
     NoVote
 }

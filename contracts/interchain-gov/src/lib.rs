@@ -4,6 +4,7 @@ pub mod error;
 mod handlers;
 pub mod msg;
 pub mod state;
+mod dependencies;
 
 pub use contract::interface::InterchainGovInterface;
 pub use error::InterchainGovError;

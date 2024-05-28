@@ -21,10 +21,10 @@ cw-storage-plus = "1.2.0"
 thiserror = { version = "1.0.50" }
 schemars = "0.8"
 cw-asset = { version = "3.0.0" }
-abstract-app = { version = "0.22.2" }
-abstract-adapter = { version = "0.22.2" }
-abstract-interface = { version = "0.22.0" }
-abstract-client = { version = "0.22.0" }
+abstract-app = { version = "0.22.2", git = "https://github.com/AbstractSDK/abstract" }
+abstract-adapter = { version = "0.22.2", git = "https://github.com/AbstractSDK/abstract" }
+abstract-interface = { version = "0.22.0", git = "https://github.com/AbstractSDK/abstract" }
+abstract-client = { version = "0.22.0", git = "https://github.com/AbstractSDK/abstract" }
 lazy_static = "1.4.0"
 
 

@@ -3,6 +3,7 @@ use cosmwasm_std::StdError;
 use cw_asset::AssetError;
 use cw_controllers::AdminError;
 use thiserror::Error;
+use crate::state::{DataStatus, ProposalId};
 
 #[derive(Error, Debug, PartialEq)]
 pub enum InterchainGovError {
@@ -29,4 +30,18 @@ pub enum InterchainGovError {
 
     #[error("Unauthorized")]
     Unauthorized {},
+
+    #[error("Proposal Already exists")]
+    ProposalAlreadyExists(ProposalId),
+
+    #[error("Data {key} not finalized. Status: {status:?}")]
+    DataNotFinalized {
+        key: String,
+        status: DataStatus
+    },
+    #[error("Member {member} already exists")]
+    MemberAlreadyExists { member: String },
+
+    #[error("Remote {chain} not available")]
+    UnknownRemoteHost { chain: String },
 }

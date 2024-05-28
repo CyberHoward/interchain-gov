@@ -1,19 +1,21 @@
+use abstract_adapter::sdk::AbstractResponse;
 use crate::{
     contract::{AdapterResult, InterchainGov},
     msg::InterchainGovInstantiateMsg,
-    state::{Config, Members, CONFIG, MEMBERS},
+    state::{Members, MEMBERS},
 };
 
-use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
+use cosmwasm_std::{DepsMut, Env, MessageInfo};
+use crate::state::DataStatus;
 
 pub fn instantiate_handler(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
-    _adapter: InterchainGov,
+    app: InterchainGov,
     msg: InterchainGovInstantiateMsg,
 ) -> AdapterResult {
-    MEMBERS.save(deps.storage, &Members { members: msg.members} )?;
+    MEMBERS.save(deps.storage, &(Members::new(&env), DataStatus::Finalized))?;
 
-    Ok(Response::new())
+    Ok(app.response("instantiate"))
 }
