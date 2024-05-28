@@ -1,9 +1,9 @@
-use my_app::{
-    contract::interface::MyAppInterface,
+use intersync::{
+    contract::interface::IntersyncInterface,
     msg::{
-        ConfigResponse, CountResponse, MyAppExecuteMsgFns, MyAppInstantiateMsg, MyAppQueryMsgFns,
+        ConfigResponse, CountResponse, IntersyncExecuteMsgFns, IntersyncInstantiateMsg, IntersyncQueryMsgFns,
     },
-    MyAppError, MY_NAMESPACE,
+    IntersyncError, MY_NAMESPACE,
 };
 
 use abstract_app::objects::namespace::Namespace;
@@ -15,7 +15,7 @@ use cw_orch::{anyhow, prelude::*};
 
 struct TestEnv<Env: CwEnv> {
     abs: AbstractClient<Env>,
-    app: Application<Env, MyAppInterface<Env>>,
+    app: Application<Env, IntersyncInterface<Env>>,
 }
 
 impl TestEnv<MockBech32> {
@@ -33,11 +33,11 @@ impl TestEnv<MockBech32> {
 
         // Publish the app
         let publisher = abs_client.publisher_builder(namespace).build()?;
-        publisher.publish_app::<MyAppInterface<_>>()?;
+        publisher.publish_app::<IntersyncInterface<_>>()?;
 
         let app = publisher
             .account()
-            .install_app::<MyAppInterface<_>>(&MyAppInstantiateMsg { count: 0 }, &[])?;
+            .install_app::<IntersyncInterface<_>>(&IntersyncInstantiateMsg { count: 0 }, &[])?;
 
         Ok(TestEnv {
             abs: abs_client,
@@ -83,13 +83,13 @@ fn failed_reset() -> anyhow::Result<()> {
     let env = TestEnv::setup()?;
     let app = env.app;
 
-    let err: MyAppError = app
+    let err: IntersyncError = app
         .call_as(&Addr::unchecked("NotAdmin"))
         .reset(9)
         .unwrap_err()
         .downcast()
         .unwrap();
-    assert_eq!(err, MyAppError::Admin(AdminError::NotAdmin {}));
+    assert_eq!(err, IntersyncError::Admin(AdminError::NotAdmin {}));
     Ok(())
 }
 
@@ -100,7 +100,7 @@ fn update_config() -> anyhow::Result<()> {
 
     app.update_config()?;
     let config = app.config()?;
-    let expected_response = my_app::msg::ConfigResponse {};
+    let expected_response = intersync::msg::ConfigResponse {};
     assert_eq!(config, expected_response);
     Ok(())
 }

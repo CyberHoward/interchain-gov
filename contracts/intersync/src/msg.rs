@@ -1,13 +1,13 @@
-use crate::contract::MyApp;
+use crate::contract::Intersync;
 
 use cosmwasm_schema::QueryResponses;
 
 // This is used for type safety and re-exporting the contract endpoint structs.
-abstract_app::app_msg_types!(MyApp, MyAppExecuteMsg, MyAppQueryMsg);
+abstract_app::app_msg_types!(Intersync, IntersyncExecuteMsg, IntersyncQueryMsg);
 
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
-pub struct MyAppInstantiateMsg {
+pub struct IntersyncInstantiateMsg {
     pub count: i32,
 }
 
@@ -15,25 +15,29 @@ pub struct MyAppInstantiateMsg {
 #[cosmwasm_schema::cw_serde]
 #[derive(cw_orch::ExecuteFns)]
 #[impl_into(ExecuteMsg)]
-pub enum MyAppExecuteMsg {
-    UpdateConfig {},
-    /// Increment count by 1
-    Increment {},
-    /// Admin method - reset count
-    Reset {
-        /// Count value after reset
-        count: i32,
+pub enum IntersyncExecuteMsg {
+    /// Called by gov when a chain wants to create a proposal
+    CreateProposal {
+
     },
+    /// Can be called by any chain to trigger tallying
+    TallyProposal {
+    
+    },
+    ///Called by gov to vote on a proposal
+    VoteProposal {
+
+    }
 }
 
 #[cosmwasm_schema::cw_serde]
-pub struct MyAppMigrateMsg {}
+pub struct IntersyncMigrateMsg {}
 
 /// App query messages
 #[cosmwasm_schema::cw_serde]
 #[derive(QueryResponses, cw_orch::QueryFns)]
 #[impl_into(QueryMsg)]
-pub enum MyAppQueryMsg {
+pub enum IntersyncQueryMsg {
     #[returns(ConfigResponse)]
     Config {},
     #[returns(CountResponse)]

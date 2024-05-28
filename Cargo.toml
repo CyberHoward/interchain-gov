@@ -31,7 +31,7 @@ lazy_static = "1.4.0"
 cw-orch = { version = "0.22.2" }
 const_format = "0.2.32"
 
-my-app = { path = "contracts/my-app" }
+intersync = { path = "contracts/intersync" }
 my-adapter = { path = "contracts/my-adapter" }
 speculoos = "0.11.0"
 semver = "1.0"

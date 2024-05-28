@@ -1,6 +1,6 @@
 use crate::{
-    contract::{MyApp, MyAppResult},
-    msg::{ConfigResponse, CountResponse, MyAppQueryMsg},
+    contract::{Intersync, IntersyncResult},
+    msg::{ConfigResponse, CountResponse, IntersyncQueryMsg},
     state::{CONFIG, COUNT},
 };
 
@@ -9,12 +9,12 @@ use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult};
 pub fn query_handler(
     deps: Deps,
     _env: Env,
-    _app: &MyApp,
-    msg: MyAppQueryMsg,
-) -> MyAppResult<Binary> {
+    _app: &Intersync,
+    msg: IntersyncQueryMsg,
+) -> IntersyncResult<Binary> {
     match msg {
-        MyAppQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        MyAppQueryMsg::Count {} => to_json_binary(&query_count(deps)?),
+        IntersyncQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
+        IntersyncQueryMsg::Count {} => to_json_binary(&query_count(deps)?),
     }
     .map_err(Into::into)
 }

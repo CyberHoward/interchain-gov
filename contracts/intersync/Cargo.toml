@@ -1,5 +1,5 @@
 [package]
-name = "my-app"
+name = "intersync"
 version = "0.0.1"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
@@ -54,6 +54,9 @@ cw-asset = { workspace = true }
 abstract-app = { workspace = true }
 const_format = { workspace = true }
 serde = "1"
+cw-utils = "1.0.3"
+dao-voting = "2.3.0"
+
 
 # Dependencies for interface
 cw-orch = { workspace = true }
@@ -66,6 +69,6 @@ dotenv = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 
 [dev-dependencies]
-my-app = { workspace = true }
+intersync = { workspace = true }
 abstract-client = { workspace = true }
 abstract-app = { workspace = true, features = ["test-utils"] }

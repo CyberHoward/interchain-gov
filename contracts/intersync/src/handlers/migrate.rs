@@ -1,6 +1,6 @@
 use crate::{
-    contract::{MyApp, MyAppResult},
-    msg::MyAppMigrateMsg,
+    contract::{Intersync, IntersyncResult},
+    msg::IntersyncMigrateMsg,
 };
 
 use abstract_app::traits::AbstractResponse;
@@ -11,8 +11,8 @@ use cosmwasm_std::{DepsMut, Env};
 pub fn migrate_handler(
     _deps: DepsMut,
     _env: Env,
-    app: MyApp,
-    _msg: MyAppMigrateMsg,
-) -> MyAppResult {
+    app: Intersync,
+    _msg: IntersyncMigrateMsg,
+) -> IntersyncResult {
     Ok(app.response("migrate"))
 }

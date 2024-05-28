@@ -2,7 +2,7 @@ gen-data-schema:
   #!/usr/bin/env bash
 
   quicktype --lang schema data-schema/data.json -o data-schema/schema.json
-  quicktype --lang rust data-schema/data.json -o contracts/my-app/src/data.rs
+  quicktype --lang rust data-schema/data.json -o contracts/intersync/src/data.rs
 
 # Install the tools that are used in this justfile
 install-tools:

@@ -7,13 +7,13 @@
 //! ```bash
 //! $ just publish uni-6 osmo-test-5
 //! ```
-use my_app::MY_APP_ID;
+use intersync::MY_APP_ID;
 
 use abstract_app::objects::namespace::Namespace;
 use abstract_client::{AbstractClient, Publisher};
 use clap::Parser;
 use cw_orch::{anyhow, daemon::networks::parse_network, prelude::*, tokio::runtime::Runtime};
-use my_app::MyAppInterface;
+use intersync::IntersyncInterface;
 
 fn publish(networks: Vec<ChainInfo>) -> anyhow::Result<()> {
     // run for each requested network
@@ -38,7 +38,7 @@ fn publish(networks: Vec<ChainInfo>) -> anyhow::Result<()> {
         }
 
         // Publish the App to the Abstract Platform
-        publisher.publish_app::<MyAppInterface<Daemon>>()?;
+        publisher.publish_app::<IntersyncInterface<Daemon>>()?;
     }
     Ok(())
 }

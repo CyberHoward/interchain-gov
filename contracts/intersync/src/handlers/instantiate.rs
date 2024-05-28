@@ -1,6 +1,6 @@
 use crate::{
-    contract::{MyApp, MyAppResult},
-    msg::MyAppInstantiateMsg,
+    contract::{Intersync, IntersyncResult},
+    msg::IntersyncInstantiateMsg,
     state::{Config, CONFIG, COUNT},
 };
 
@@ -10,9 +10,9 @@ pub fn instantiate_handler(
     deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
-    _app: MyApp,
-    msg: MyAppInstantiateMsg,
-) -> MyAppResult {
+    _app: Intersync,
+    msg: IntersyncInstantiateMsg,
+) -> IntersyncResult {
     let config: Config = Config {};
 
     CONFIG.save(deps.storage, &config)?;
