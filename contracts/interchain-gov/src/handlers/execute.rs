@@ -20,38 +20,44 @@ pub fn execute_handler(
     msg: InterchainGovExecuteMsg,
 ) -> AdapterResult {
     match msg {
-        InterchainGovExecuteMsg::UpdateConfig {} => update_config(deps, info, adapter),
-        InterchainGovExecuteMsg::SetStatus { status } => set_status(deps, adapter, status),
+        InterchainGovExecuteMsg::CreateProposal { proposal } => {
+            create_proposal(deps, info, adapter, proposal)
+        },
+        InterchainGovExecuteMsg::TallyProposal { prop_hash } => {
+            tally_proposal(deps, adapter, prop_hash)
+        },
     }
 }
 
-/// Update the configuration of the adapter
-fn update_config(deps: DepsMut, _msg_info: MessageInfo, adapter: InterchainGov) -> AdapterResult {
-    // Only admin(namespace owner) can change recipient address
-    let namespace = adapter
-        .module_registry(deps.as_ref())?
-        .query_namespace(Namespace::new(MY_NAMESPACE)?)?;
+fn create_proposal(
+    deps: DepsMut,
+    info: MessageInfo,
+    adapter: InterchainGov,
+    proposal: Proposal,
+) -> AdapterResult {
+    let config = CONFIG.load(deps.storage)?;
+    let status = STATUS.load(deps.storage)?;
 
-    // unwrap namespace, since it's unlikely to have unclaimed namespace as this adapter installed
-    let namespace_info = namespace.unwrap();
-    ensure_eq!(
-        namespace_info.account_base,
-        adapter.target_account.clone().unwrap(),
-        InterchainGovError::Unauthorized {}
-    );
-    let mut _config = CONFIG.load(deps.storage)?;
+    ensure_eq!(status, DataStatus::Initiate, InterchainGovError::ProposalAlreadyExists);
 
-    Ok(adapter.response("update_config"))
-}
+    let registry = adapter
+        .base
+        .module_registry(deps.as_ref())
+        .get_registry(MY_NAMESPACE)?;
 
-fn set_status(deps: DepsMut, adapter: InterchainGov, status: String) -> AdapterResult {
-    let account_registry = adapter.account_registry(deps.as_ref())?;
+    let prop_hash = registry.hash_proposal(&proposal)?;
 
-    let account_id = account_registry.account_id(adapter.target()?)?;
-    STATUS.save(deps.storage, &account_id, &status)?;
+    let prop = Proposal {
+        title: proposal.title,
+        description: proposal.description,
+        proposer: info.sender,
+        proposer_chain: proposal.proposer_chain,
+        min_voting_period: proposal.min_voting_period,
+        expiration: proposal.expiration,
+        status: Status::Proposed,
+    };
 
-    Ok(adapter
-        .response("set_status")
-        .add_attribute("new_status", &status)
-        .add_attribute("account_id", account_id.to_string()))
+    STATUS.save(deps.storage, &DataStatus::Proposed)?;
+
+    Ok(prop_hash.to_response())
 }

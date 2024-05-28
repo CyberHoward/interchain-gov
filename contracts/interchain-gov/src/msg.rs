@@ -10,7 +10,7 @@ use crate::{state::Proposal};
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
 pub struct InterchainGovInstantiateMsg {
-    pub count: i32,
+    pub members: Vec<String>,
 }
 
 /// App execute messages
@@ -43,14 +43,7 @@ pub struct InterchainGovMigrateMsg {}
 pub enum InterchainGovQueryMsg {
     #[returns(ConfigResponse)]
     Config {},
-    #[returns(CountResponse)]
-    Count {},
 }
 
 #[cosmwasm_schema::cw_serde]
 pub struct ConfigResponse {}
-
-#[cosmwasm_schema::cw_serde]
-pub struct CountResponse {
-    pub count: i32,
-}

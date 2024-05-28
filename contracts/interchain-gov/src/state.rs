@@ -5,15 +5,9 @@ use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
 use dao_voting::{status::Status, threshold::Threshold, voting::Votes};
 
-#[cosmwasm_schema::cw_serde]
-pub struct Config {}
-
-pub const CONFIG: Item<Config> = Item::new("config");
-pub const COUNT: Item<i32> = Item::new("count");
-
 pub const PROPS: Map<String, (DataStatus, Binary)> = Map::new("props");
 pub const MEMBERS: Item<Members> = Item::new("members");
-pub const LOCAL_VOTE: Item<Vote> = Item::new("local_vote");
+pub const LOCAL_VOTE: Map<u32, Vote> = Item::new("local_vote");
 
 /// Different statuses for a data item
 #[cw_serde]
@@ -25,7 +19,6 @@ pub enum DataStatus {
 
 #[cw_serde]
 pub struct Members {
-    pub status: DataStatus,
     pub members: Vec<String>,
 }
 
@@ -49,4 +42,10 @@ pub struct Proposal {
     pub expiration: Expiration,
     /// The proposal status
     pub status: Status,
+}
+
+#[cw_serde]
+enum Vote {
+    Yes,
+    NoVote
 }

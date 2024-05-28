@@ -1,7 +1,7 @@
 use crate::{
     contract::{AdapterResult, InterchainGov},
     msg::InterchainGovInstantiateMsg,
-    state::{Config, CONFIG},
+    state::{Config, Members, CONFIG, MEMBERS},
 };
 
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
@@ -11,12 +11,9 @@ pub fn instantiate_handler(
     _env: Env,
     _info: MessageInfo,
     _adapter: InterchainGov,
-    _msg: InterchainGovInstantiateMsg,
+    msg: InterchainGovInstantiateMsg,
 ) -> AdapterResult {
-    let config: Config = Config {};
+    MEMBERS.save(deps.storage, &Members { members: msg.members} )?;
 
-    CONFIG.save(deps.storage, &config)?;
-
-    // Example instantiation that doesn't do anything
     Ok(Response::new())
 }
