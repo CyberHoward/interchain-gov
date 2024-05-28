@@ -1,9 +1,10 @@
 use abstract_adapter::{sdk::AbstractSdkError, std::AbstractError, AdapterError};
+use abstract_adapter::objects::module::ModuleInfo;
 use cosmwasm_std::StdError;
 use cw_asset::AssetError;
 use cw_controllers::AdminError;
 use thiserror::Error;
-use crate::state::{DataStatus, ProposalId};
+use crate::state::{DataState, ProposalId};
 
 #[derive(Error, Debug, PartialEq)]
 pub enum InterchainGovError {
@@ -37,11 +38,19 @@ pub enum InterchainGovError {
     #[error("Data {key} not finalized. Status: {status:?}")]
     DataNotFinalized {
         key: String,
-        status: DataStatus
+        state: DataState
     },
+
     #[error("Member {member} already exists")]
     MemberAlreadyExists { member: String },
 
-    #[error("Remote {chain} not available")]
-    UnknownRemoteHost { chain: String },
+    #[error("Remote {host} not available")]
+    UnknownRemoteHost { host: String },
+
+    #[error("Unauthorized IBC message from module: {0}")]
+    UnauthorizedIbcModule(ModuleInfo),
+
+    #[error("Unauthorized IBC message")]
+    UnauthorizedIbcMessage,
+
 }

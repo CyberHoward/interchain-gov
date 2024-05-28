@@ -1,31 +1,42 @@
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Env};
+use cosmwasm_std::{Addr, Binary, Decimal, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
 use dao_voting::{status::Status};
+use dao_voting::threshold::{PercentageThreshold, Threshold};
 
 
 pub type ProposalId = u32;
 
 pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("our_vote");
 
-pub const PROPS: Map<ProposalId, (DataStatus, Binary)> = Map::new("props");
+pub const PROPS: Map<ProposalId, (DataState, Binary)> = Map::new("props");
 
 
 /// Local members to local data status
-pub const MEMBERS: Item<(Members, DataStatus)> = Item::new("members");
+pub const MEMBERS: Item<(Members, DataState)> = Item::new("members");
 /// Remote member statuses
-pub const MEMBER_UPDATES: Map<ChainName, DataStatus> = Map::new("member_updates");
+pub const MEMBER_UPDATES: Map<ChainName, DataState> = Map::new("member_updates");
 
 // Mabye we should do Map<Key, DataStatus>
 
 /// Different statuses for a data item
 #[cw_serde]
-pub enum DataStatus {
+pub enum DataState {
     Initiate = 0,
     Proposed = 1,
     Finalized = 2,
+}
+
+impl DataState {
+    pub fn is_proposed(&self) -> bool {
+        matches!(self, DataState::Proposed)
+    }
+
+    pub fn is_finalized(&self) -> bool {
+        matches!(self, DataState::Finalized)
+    }
 }
 
 #[cw_serde]
@@ -75,6 +86,8 @@ pub struct Proposal {
     /// The the time at which this proposal will expire and close for
     /// additional votes.
     pub expiration: Expiration,
+    /// The threshold at which this proposal will pass.
+    pub threshold: Threshold,
     /// The proposal status
     pub status: Status,
 }
@@ -87,6 +100,9 @@ impl Proposal {
             proposer: proposer.to_string(),
             proposer_chain: ChainName::new(env),
             min_voting_period: proposal.min_voting_period,
+            threshold: Threshold::AbsolutePercentage {
+                percentage: PercentageThreshold::Percent(Decimal::percent(100))
+            },
             expiration: proposal.expiration,
             status: Status::Open
         }

@@ -13,9 +13,13 @@ use abstract_adapter::sdk::base::{ModuleIbcEndpoint};
 use abstract_adapter::sdk::IbcInterface;
 use abstract_adapter::std::ibc_client::state::IBC_INFRA;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{ensure_eq, DepsMut, Env, MessageInfo};
+use cosmwasm_std::{ensure_eq, DepsMut, Env, MessageInfo, to_json_binary};
 use crate::msg::InterchainGovIbcMsg;
-use crate::state::{DataStatus, MEMBERS, Proposal, ProposalMsg};
+use crate::state::{DataState, MEMBERS, Proposal, ProposalMsg};
+
+
+
+
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -25,10 +29,10 @@ pub fn execute_handler(
     msg: InterchainGovExecuteMsg,
 ) -> AdapterResult {
     match msg {
-        InterchainGovExecuteMsg::CreateProposal { proposal } => {
-            create_proposal(deps, info, adapter, proposal, env)
+        InterchainGovExecuteMsg::Propose { proposal } => {
+            propose(deps, info, adapter, proposal, env)
         },
-        InterchainGovExecuteMsg::AddMember { chain } => add_member(deps, adapter, chain),
+        InterchainGovExecuteMsg::AddMembers { members } => add_members(deps, adapter, members),
         // InterchainGovExecuteMsg::TallyProposal { prop_hash } => {
         //     tally_proposal(deps, adapter, prop_hash)
         // },
@@ -38,43 +42,59 @@ pub fn execute_handler(
 
 /// A
 
-fn add_member(
+fn add_members(
     deps: DepsMut,
     app: InterchainGov,
-    member: ChainName
+    new_members: Vec<ChainName>
 ) -> AdapterResult {
     // TODO: auth
 
     // check whether member is in the list
     let (mut members, status) = MEMBERS.load(deps.storage)?;
-    ensure_eq!(status, DataStatus::Finalized, InterchainGovError::DataNotFinalized {
+
+    ensure_eq!(status, DataState::Finalized, InterchainGovError::DataNotFinalized {
         key: "members".to_string(),
-        status,
+        state,
     });
+
+    // check that all our other chains have been finalized?
+
+
+    let ibc_client = app.ibc_client(deps.as_ref());
+    let mut registration_messages = vec![];
 
     // Now that there's a new member, check that they're in the list of proxies
     let ibc_host_addr = app.ibc_host(deps.as_ref())?;
-    if IBC_INFRA.query(&deps.querier, ibc_host_addr, &member)?.is_none() {
-        return Err(InterchainGovError::UnknownRemoteHost {
-            chain: member.to_string(),
-        })
-    };
+    for new_member in new_members.iter() {
+        if IBC_INFRA.query(&deps.querier, ibc_host_addr.clone(), &new_member)?.is_none() {
+            return Err(InterchainGovError::UnknownRemoteHost {
+                host: new_member.to_string(),
+            })
+        };
+        // Add the new member, updating status to Proposed
+        members.members.push(new_member.clone());
+    }
 
-    // Add the new member, updating status to Proposed
-    members.members.push(member.clone());
-    MEMBERS.save(deps.storage, &(members.clone(), DataStatus::Proposed))?;
+
+    MEMBERS.save(deps.storage, &(members.clone(), DataState::Proposed))?;
 
     let target_module = ModuleInfo::from_id(app.module_id(), app.version().into())?;
 
-    let ibc_client = app.ibc_client(deps.as_ref());
 
-    let ibc_register_msg = ibc_client.module_ibc_action(member.to_string(),target_module, &InterchainGovIbcMsg::Register, None)?;
+    // let ibc_register_msg = ibc_client.module_ibc_action(new_members.to_string(), target_module, &InterchainGovIbcMsg::SyncState {
+    //     key: "members".to_string(),
+    //     value: to_json_binary(members.members)?
+    // }, None)?;
 
-    Ok(app.response("add_member").add_message(ibc_register_msg))
+    let ibc_register_msg = ibc_client.module_ibc_action(new_members.to_string(), target_module, &InterchainGovIbcMsg::UpdateMembers {
+        members
+    }, None)?;
+
+    Ok(app.response("add_members").add_message(ibc_register_msg))
 }
 
 
-fn create_proposal(
+fn propose(
     deps: DepsMut,
     info: MessageInfo,
     app: InterchainGov,
@@ -83,7 +103,6 @@ fn create_proposal(
 ) -> AdapterResult {
 
     let prop = Proposal::new(proposal, &info.sender, &env);
-
 
     Ok(app.response("create_proposal"))
 }

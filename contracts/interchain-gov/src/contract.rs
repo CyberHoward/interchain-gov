@@ -23,6 +23,7 @@ const INTERCHAIN_GOV: InterchainGov = InterchainGov::new(MY_ADAPTER_ID, ADAPTER_
     .with_instantiate(handlers::instantiate_handler)
     .with_execute(handlers::execute_handler)
     .with_query(handlers::query_handler)
+    .with_module_ibc()
     .with_dependencies(&[IBC_CLIENT_DEP]);
 
 // Export handlers
