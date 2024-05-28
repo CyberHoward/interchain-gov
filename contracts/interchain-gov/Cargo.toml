@@ -72,3 +72,4 @@ env_logger = { workspace = true, optional = true }
 interchain-gov = { workspace = true }
 abstract-client = { workspace = true }
 abstract-adapter = { workspace = true, features = ["test-utils"] }
+speculoos = { workspace = true }

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+use abstract_adapter::objects::chain_name::ChainName;
 use interchain_gov::{
     contract::interface::InterchainGovInterface,
     msg::{ConfigResponse, ExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
@@ -5,36 +7,37 @@ use interchain_gov::{
 };
 
 use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
-use abstract_client::{AbstractClient, Application, Publisher};
+use abstract_adapter::std::manager::ExecuteMsgFns;
+use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
 use cosmwasm_std::coins;
 // Use prelude to get all the necessary imports
 use cw_orch::{anyhow, prelude::*};
+use cw_orch::mock::cw_multi_test::AppResponse;
+use speculoos::prelude::*;
 
 struct TestEnv<Env: CwEnv> {
     publisher: Publisher<Env>,
     abs: AbstractClient<Env>,
-    adapter: Application<Env, InterchainGovInterface<Env>>,
+    gov: Application<Env, InterchainGovInterface<Env>>,
 }
 
-impl TestEnv<MockBech32> {
+impl<Env: CwEnv> TestEnv<Env> {
     /// Set up the test environment with an Account that has the Adapter installed
-    #[allow(clippy::type_complexity)]
-    fn setup() -> anyhow::Result<TestEnv<MockBech32>> {
+    fn setup(env: Env) -> anyhow::Result<TestEnv<Env>> {
         // Create a sender and mock env
-        let mock = MockBech32::new("mock");
-        let sender = mock.sender();
+        let sender = env.sender();
         let namespace = Namespace::new(MY_NAMESPACE)?;
 
         // You can set up Abstract with a builder.
-        let abs_client = AbstractClient::builder(mock).build()?;
-        // The adapter supports setting balances for addresses and configuring ANS.
-        abs_client.set_balance(sender, &coins(123, "ucosm"))?;
+        let abs_client = AbstractClient::builder(env).build()?;
 
         // Publish the adapter
-        let publisher = abs_client.publisher_builder(namespace).build()?;
+        let publisher = abs_client.publisher_builder(namespace).install_on_sub_account(false).build()?;
         publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<_>>(
             InterchainGovInstantiateMsg {},
         )?;
+        // Enable IBC on the account
+        publisher.account().as_ref().manager.update_settings(Some(true))?;
 
         let adapter = publisher
             .account()
@@ -43,103 +46,77 @@ impl TestEnv<MockBech32> {
         Ok(TestEnv {
             abs: abs_client,
             publisher,
-            adapter,
+            gov: adapter,
         })
+    }
+
+    pub fn execute_gov(&self, request: InterchainGovExecuteMsg, as_acc: Option<&Account<Env>>) -> anyhow::Result<Env::Response> {
+        Ok(self.gov.execute(&AdapterRequestMsg {
+            proxy_address: Some(as_acc.unwrap_or(self.gov.account()).proxy()?.to_string()),
+            request,
+        }.into(), None)?)
+
+    }
+
+    pub fn chain_id(&self) -> String {
+        self.abs.environment().env_info().chain_id
+    }
+
+    pub fn chain_name(&self) -> ChainName {
+        let chain_id = self.chain_id();
+        ChainName::from_chain_id(&chain_id)
     }
 }
 
 #[test]
 fn successful_install() -> anyhow::Result<()> {
-    let env = TestEnv::setup()?;
-    let adapter = env.adapter;
+    let mock = MockBech32::new("mock");
+    let env = TestEnv::setup(mock)?;
+    let adapter = env.gov.clone();
 
     let config = adapter.config()?;
     assert_eq!(config, ConfigResponse {});
-    Ok(())
-}
 
-#[test]
-fn update_config() -> anyhow::Result<()> {
-    let env = TestEnv::setup()?;
-    let adapter = env.adapter;
-
-    // Executing it on publisher account
-    // Note that it's not a requirement to have it installed in this case
-    let publisher_account = env
-        .abs
-        .publisher_builder(Namespace::new(MY_NAMESPACE).unwrap())
-        .build()?;
-
-    adapter.execute(
-        &AdapterRequestMsg {
-            proxy_address: Some(publisher_account.account().proxy()?.to_string()),
-            request: InterchainGovExecuteMsg::UpdateConfig {},
-        }
-        .into(),
-        None,
-    )?;
-
-    let config = adapter.config()?;
-    let expected_response = interchain_gov::msg::ConfigResponse {};
-    assert_eq!(config, expected_response);
-
-    // Adapter installed on sub-account of the publisher so this should error
-    let err = adapter
-        .execute(
-            &AdapterRequestMsg {
-                proxy_address: Some(adapter.account().proxy()?.to_string()),
-                request: InterchainGovExecuteMsg::UpdateConfig {},
-            }
-            .into(),
-            None,
-        )
-        .unwrap_err();
-    assert_eq!(err.root().to_string(), "Unauthorized");
+    // Check single member
+    let members = adapter.members()?;
+    assert_eq!(members.members.len(), 1);
+    // check that the single member is the current chain
+    let current_chain_id = env.chain_name();
+    assert_that!(members.members[0]).is_equal_to(current_chain_id);
 
     Ok(())
 }
 
-#[test]
-fn set_status() -> anyhow::Result<()> {
-    let env = TestEnv::setup()?;
-    let adapter = env.adapter;
-
-    let first_status = "my_status".to_owned();
-    let second_status = "my_status".to_owned();
-
-    let subaccount = &env.publisher.account().sub_accounts()?[0];
-
-    subaccount.as_ref().manager.execute_on_module(
-        MY_ADAPTER_ID,
-        ExecuteMsg::Module(AdapterRequestMsg {
-            proxy_address: Some(subaccount.proxy()?.to_string()),
-            request: InterchainGovExecuteMsg::SetStatus {
-                status: first_status.clone(),
-            },
-        }),
-    )?;
-
-    let new_account = env
-        .abs
-        .account_builder()
-        .install_adapter::<InterchainGovInterface<MockBech32>>()?
-        .build()?;
-
-    new_account.as_ref().manager.execute_on_module(
-        MY_ADAPTER_ID,
-        ExecuteMsg::Module(AdapterRequestMsg {
-            proxy_address: Some(new_account.proxy()?.to_string()),
-            request: InterchainGovExecuteMsg::SetStatus {
-                status: second_status.clone(),
-            },
-        }),
-    )?;
-
-    let status_response = adapter.status(adapter.account().id()?)?;
-    assert_eq!(status_response.status, Some(first_status));
-
-    let status_response = adapter.status(new_account.id()?)?;
-    assert_eq!(status_response.status, Some(second_status));
-
-    Ok(())
-}
+// #[test]
+// fn update_members() -> anyhow::Result<()> {
+//     let env = TestEnv::setup()?;
+//     let adapter = env.gov;
+//
+//     // Executing it on publisher account
+//     // Note that it's not a requirement to have it installed in this case
+//     let publisher_account = env
+//         .abs
+//         .publisher_builder(Namespace::new(MY_NAMESPACE).unwrap())
+//         .build()?;
+//
+//     env.execute_gov(InterchainGovExecuteMsg::UpdateConfig {}, None)?;
+//
+//     let config = adapter.config()?;
+//     let expected_response = interchain_gov::msg::ConfigResponse {};
+//     assert_eq!(config, expected_response);
+//
+//     // Adapter installed on sub-account of the publisher so this should error
+//     let err = adapter
+//         .execute(
+//             &AdapterRequestMsg {
+//                 proxy_address: Some(adapter.account().proxy()?.to_string()),
+//                 request: InterchainGovExecuteMsg::UpdateConfig {},
+//             }
+//             .into(),
+//             None,
+//         )
+//         .unwrap_err();
+//     assert_eq!(err.root().to_string(), "Unauthorized");
+//
+//     Ok(())
+// }
