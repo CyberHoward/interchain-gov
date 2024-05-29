@@ -42,14 +42,7 @@ pub fn execute_handler(
     }
 }
 
-fn temporary_register_remote_gov_module_addrs(deps: DepsMut, app: InterchainGov, modules: Vec<(ChainName, String)>) -> AdapterResult {
-    for (chain, addr) in modules {
-        TEMP_REMOTE_GOV_MODULE_ADDRS.save(deps.storage, &chain, &addr)?;
-    }
-
-    Ok(app.response("register_remote_gov_module_addrs"))
-}
-
+/// Reach out to external members and request their local vote results
 fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
     let (prop, state) = load_proposal(deps.storage, &prop_id)?;
 
@@ -103,6 +96,8 @@ fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: Pr
     Ok(app.response("query_vote_results").add_attribute("prop_id", prop_id).add_messages(vote_queries))
 }
 
+
+/// REuest external members actual governance vote details
 fn request_gov_vote_details(deps: DepsMut, env: Env, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
     // check existing vote results
     let existing_vote_results = VOTE_RESULTS.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
@@ -374,3 +369,11 @@ fn this_module(app: &InterchainGov) -> AbstractResult<ModuleInfo> {
 }
 
 
+
+fn temporary_register_remote_gov_module_addrs(deps: DepsMut, app: InterchainGov, modules: Vec<(ChainName, String)>) -> AdapterResult {
+    for (chain, addr) in modules {
+        TEMP_REMOTE_GOV_MODULE_ADDRS.save(deps.storage, &chain, &addr)?;
+    }
+
+    Ok(app.response("register_remote_gov_module_addrs"))
+}
