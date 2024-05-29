@@ -1,59 +1,133 @@
+use std::fmt::Display;
+
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Decimal, Env};
+use cosmwasm_std::{Addr, Binary, Decimal, Deps, DepsMut, Env, StdResult, Storage};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
-use dao_voting::{status::Status};
+use dao_voting::status::Status;
 use dao_voting::threshold::{PercentageThreshold, Threshold};
-
 
 pub type ProposalId = String;
 pub type StorageKey = String;
 pub type Key = String;
-
-pub enum StateChange {
-    Backup(Binary),
-    Proposal(Binary),
-}
 
 /// LOCAL
 /// Instantiate: members ([A]) -> DNE
 /// Propose adding B: members ([A]) -> initialized, Proposal([A, B])
 /// Propose Callback: members([A, B]) -> finalized, None
 ///
-///
 /// REMOTE
 /// Instantiate: members ([B]) -> DNE
 /// Proposal received: members([A, B]) -> proposed, Backup([A])
-pub const ITEMS_DATA_STATE: Map<(StorageKey, DataState), StateChange> = Map::new("item_data");
-pub const MAPS_DATA_STATE: Map<(StorageKey, Key, DataState), StateChange> = Map::new("map_data");
+
 pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
 
-pub const MEMBERS: Item<Members> = Item::new("members");
+pub(self) const MEMBERS_KEY: &'static str = "members";
+pub(self) const MEMBERS: Item<Members> = Item::new(MEMBERS_KEY);
 
 pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
 
 pub const PROPOSALS: Map<ProposalId, Proposal> = Map::new("props");
+
+pub const ALLOW_JOINING_GOV: Item<Members> = Item::new("alw");
 /// Local members to local data status
 /// Remote member statuses
 
-// Mabye we should do Map<Key, DataStatus>
+pub mod members_sync_state {
+    use cosmwasm_std::{to_json_binary, StdResult, Storage};
+    use cw_storage_plus::Item;
+    use ibc_sync_state::{DataState, ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
 
-/// Different statuses for a data item
-#[cw_serde]
-pub enum DataState {
-    Initiate = 0,
-    Proposed = 1,
-    Finalized = 2,
-}
+    use super::{Members, MEMBERS_KEY};
 
-impl DataState {
-    pub fn is_proposed(&self) -> bool {
-        matches!(self, DataState::Proposed)
+    pub struct MembersSyncState {
+        item_state_controller: ItemStateSyncController,
+        members: Item<'static, Members>,
     }
 
-    pub fn is_finalized(&self) -> bool {
-        matches!(self, DataState::Finalized)
+    impl MembersSyncState {
+        pub fn new() -> Self {
+            MembersSyncState {
+                item_state_controller: ItemStateSyncController::new(),
+                members: super::MEMBERS,
+            }
+        }
+
+        pub fn load_members(&self, storage: &dyn Storage) -> StdResult<Members> {
+            self.members.load(storage)
+        }
+
+        pub fn load_state_change(&self, storage: &dyn Storage) -> SyncStateResult<StateChange> {
+            let state_change = self.item_state_controller.load_state_change(storage, MEMBERS_KEY)?;
+        }
+
+        pub fn initiate_members(
+            &self,
+            storage: &mut dyn Storage,
+            members: Members,
+        ) -> SyncStateResult<()> {
+            self.item_state_controller
+                .assert_finalized(storage, MEMBERS_KEY.to_string())?;
+            self.members.save(storage, &members)?;
+            self.item_state_controller
+                .initiate_item_state(
+                    storage,
+                    MEMBERS_KEY.to_string(),
+                    StateChange::Proposal(to_json_binary(&members)?),
+                )
+                .map_err(Into::into)
+        }
+
+        pub fn propose_members(
+            &self,
+            storage: &mut dyn Storage,
+            members: Members,
+        ) -> SyncStateResult<()> {
+            self.members.save(storage, &members)?;
+            self.item_state_controller.propose_item_state(
+                storage,
+                MEMBERS_KEY.to_string(),
+                StateChange::Proposal(to_json_binary(&members)?),
+            )
+        }
+
+        pub fn finalize_members(
+            &self,
+            storage: &mut dyn Storage,
+            // Members to finalize
+            // Uses initialized / proposed state None
+            members: Option<Members>,
+        ) -> SyncStateResult<()> {
+
+            let members = {
+                if let Some(members) = members {
+                    members
+                } else {
+                    self.load_state_change(storage)?;
+                }
+                members
+            };
+
+            self.item_state_controller.finalize_item_state(
+                storage,
+                MEMBERS_KEY.to_string(),
+                StateChange::Proposal(to_json_binary(&members)?),
+            )
+        }
+
+        pub fn assert_finalized(&self, storage: &dyn Storage) -> SyncStateResult<()> {
+            self.item_state_controller
+                .assert_finalized(storage, MEMBERS_KEY.to_string())
+        }
+
+        // pub fn assert_proposed(&self, storage: &dyn Storage) -> SyncStateResult<()> {
+        //     self.item_state_controller.assert_proposed(storage, MEMBERS_KEY.to_string())
+        // }
+
+        // pub fn assert_initiated(&self, storage: &dyn Storage) -> SyncStateResult<()> {
+        //     self.item_state_controller.assert_initiated(storage, MEMBERS_KEY.to_string())
+        // }
     }
 }
 
@@ -65,7 +139,7 @@ pub struct Members {
 impl Members {
     pub fn new(env: &Env) -> Self {
         Members {
-            members: vec![ChainName::new(env)]
+            members: vec![ChainName::new(env)],
         }
     }
 }
@@ -74,13 +148,13 @@ impl Members {
 #[cw_serde]
 pub enum ProposalAction {
     /// Add member action
-    InviteMember {
-        member: ChainName
+    UpdateMembers {
+        members: Members,
     },
     SyncItem {
         key: String,
-        value: Binary
-    }
+        value: Binary,
+    },
 }
 
 #[cw_serde]
@@ -97,7 +171,21 @@ pub struct ProposalMsg {
     /// additional votes.
     pub expiration: Expiration,
     /// A standard action that the group can run
-    pub action: ProposalAction
+    pub action: ProposalAction,
+}
+
+impl Display for ProposalMsg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.title, self.description)
+    }
+}
+
+impl ProposalMsg {
+    pub fn hash(&self) -> String {
+        let hash = <sha2::Sha256 as sha2::Digest>::digest(self.to_string());
+        let prop_id = base64::prelude::BASE64_STANDARD.encode(hash.as_slice());
+        prop_id
+    }
 }
 
 // https://github.com/DA0-DA0/dao-contracts/blob/development/contracts/proposal/dao-proposal-single/src/proposal.rs
@@ -129,13 +217,12 @@ pub struct Proposal {
 
 impl Proposal {
     pub fn new(proposal: ProposalMsg, proposer: &Addr, env: &Env) -> Self {
-
         let ProposalMsg {
             title,
             description,
             min_voting_period,
             expiration,
-            action
+            action,
         } = proposal;
 
         Proposal {
@@ -147,15 +234,22 @@ impl Proposal {
             proposer: proposer.to_string(),
             proposer_chain: ChainName::new(env),
             threshold: Threshold::AbsolutePercentage {
-                percentage: PercentageThreshold::Percent(Decimal::percent(100))
+                percentage: PercentageThreshold::Percent(Decimal::percent(100)),
             },
             // status: Status::Open
         }
+    }
+
+    pub fn hash(&ProposalMsg) -> String {
+        let hash = <sha2::Sha256 as sha2::Digest>::digest(self.to_string());
+        let prop_id = base64::prelude::BASE64_STANDARD.encode(hash.as_slice());
+        let prop = Proposal::new(proposal, &info.sender, &env);
+
     }
 }
 
 #[cw_serde]
 pub enum Vote {
     Yes,
-    NoVote
+    NoVote,
 }

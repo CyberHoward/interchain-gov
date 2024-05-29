@@ -1,5 +1,5 @@
 [package]
-name = "interchain-gov"
+name = "ibc-sync-state"
 version = "0.0.1"
 authors = [
   "CyberHoward <cyberhoward@protonmail.com>",
@@ -14,35 +14,6 @@ license = "GPL-3.0-or-later"
 keywords = ["cosmos", "cosmwasm", "abstractsdk"]
 resolver = "2"
 
-exclude = ["contract.wasm", "hash.txt"]
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[[bin]]
-name = "schema"
-required-features = ["schema"]
-
-[[bin]]
-name = "publish"
-required-features = ["daemon-bin"]
-
-[[bin]]
-name = "local_daemon"
-required-features = ["daemon-bin"]
-
-[features]
-default = ["export"]
-export = []
-daemon-bin = [
-  "cw-orch/daemon",
-  "dep:clap",
-  "dep:abstract-client",
-  "dep:dotenv",
-  "dep:env_logger",
-]
-schema = ["abstract-adapter/schema"]
-
 [dependencies]
 cosmwasm-std = { workspace = true }
 cosmwasm-schema = { workspace = true }
@@ -55,7 +26,6 @@ abstract-adapter = { workspace = true }
 const_format = { workspace = true }
 sha2 = { workspace = true }
 base64 = { version = "0.22.1",default-features = false,features = ["alloc"] }
-ibc-sync-state = { path = "../../packages/ibc-sync-state" }
 
 serde = "1"
 cw-utils = "1.0.3"

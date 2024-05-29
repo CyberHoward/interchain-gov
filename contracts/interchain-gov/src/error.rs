@@ -1,12 +1,13 @@
-use abstract_adapter::{sdk::AbstractSdkError, std::AbstractError, AdapterError};
+use crate::state::ProposalId;
 use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
 use abstract_adapter::std::ibc::IbcResponseMsg;
+use abstract_adapter::{sdk::AbstractSdkError, std::AbstractError, AdapterError};
 use cosmwasm_std::StdError;
 use cw_asset::AssetError;
 use cw_controllers::AdminError;
+use ibc_sync_state::{DataState, SyncStateError};
 use thiserror::Error;
-use crate::state::{DataState, ProposalId};
 
 #[derive(Error, Debug, PartialEq)]
 pub enum InterchainGovError {
@@ -26,6 +27,9 @@ pub enum InterchainGovError {
     Admin(#[from] AdminError),
 
     #[error("{0}")]
+    SyncState(#[from] SyncStateError),
+
+    #[error("{0}")]
     AdapterError(#[from] AdapterError),
 
     #[error("{0} are not implemented")]
@@ -37,11 +41,8 @@ pub enum InterchainGovError {
     #[error("Proposal Already exists")]
     ProposalAlreadyExists(ProposalId),
 
-    #[error("Data {key} not finalized. Status: {status:?}")]
-    DataNotFinalized {
-        key: String,
-        state: DataState
-    },
+    #[error("Data {key} not finalized. Status: {state}")]
+    DataNotFinalized { key: String, state: DataState },
 
     #[error("Member {member} already exists")]
     MemberAlreadyExists { member: String },
@@ -55,9 +56,8 @@ pub enum InterchainGovError {
     #[error("Unauthorized IBC message")]
     UnauthorizedIbcMessage,
 
-    #[error("IBC Message failed: {:?}")]
-    IbcFailed(IbcResponseMsg),
-
+    // #[error("IBC Message failed: {:?}")]
+    // IbcFailed(IbcResponseMsg),
     #[error("Unknown callback message: {0}")]
     UnknownCallbackMessage(String),
 
@@ -65,6 +65,6 @@ pub enum InterchainGovError {
     PreExistingProposalState {
         prop_id: ProposalId,
         chain: ChainName,
-        state: DataState
-    }
+        state: DataState,
+    },
 }

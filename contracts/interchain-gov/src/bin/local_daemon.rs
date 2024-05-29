@@ -7,7 +7,9 @@
 //! # Run
 //!
 //! `RUST_LOG=info cargo run --bin local_daemon --features="daemon-bin" --package interchain-gov`
-use interchain_gov::{contract::interface::InterchainGovInterface, InterchainGovExecuteMsg, MY_ADAPTER_ID};
+use interchain_gov::{
+    contract::interface::InterchainGovInterface, InterchainGovExecuteMsg, MY_ADAPTER_ID,
+};
 
 use abstract_adapter::{objects::namespace::Namespace, std::adapter::AdapterRequestMsg};
 use abstract_client::{AbstractClient, Publisher};

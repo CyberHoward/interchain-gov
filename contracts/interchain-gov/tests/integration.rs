@@ -1,18 +1,18 @@
-use std::str::FromStr;
 use abstract_adapter::objects::chain_name::ChainName;
 use interchain_gov::{
     contract::interface::InterchainGovInterface,
     msg::{ConfigResponse, ExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
     InterchainGovExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
 };
+use std::str::FromStr;
 
-use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_adapter::std::manager::ExecuteMsgFns;
+use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
 use cosmwasm_std::coins;
 // Use prelude to get all the necessary imports
-use cw_orch::{anyhow, prelude::*};
 use cw_orch::mock::cw_multi_test::AppResponse;
+use cw_orch::{anyhow, prelude::*};
 use speculoos::prelude::*;
 
 struct TestEnv<Env: CwEnv> {
@@ -32,12 +32,19 @@ impl<Env: CwEnv> TestEnv<Env> {
         let abs_client = AbstractClient::builder(env).build()?;
 
         // Publish the adapter
-        let publisher = abs_client.publisher_builder(namespace).install_on_sub_account(false).build()?;
+        let publisher = abs_client
+            .publisher_builder(namespace)
+            .install_on_sub_account(false)
+            .build()?;
         publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<_>>(
             InterchainGovInstantiateMsg {},
         )?;
         // Enable IBC on the account
-        publisher.account().as_ref().manager.update_settings(Some(true))?;
+        publisher
+            .account()
+            .as_ref()
+            .manager
+            .update_settings(Some(true))?;
 
         let adapter = publisher
             .account()
@@ -50,12 +57,19 @@ impl<Env: CwEnv> TestEnv<Env> {
         })
     }
 
-    pub fn execute_gov(&self, request: InterchainGovExecuteMsg, as_acc: Option<&Account<Env>>) -> anyhow::Result<Env::Response> {
-        Ok(self.gov.execute(&AdapterRequestMsg {
-            proxy_address: Some(as_acc.unwrap_or(self.gov.account()).proxy()?.to_string()),
-            request,
-        }.into(), None)?)
-
+    pub fn execute_gov(
+        &self,
+        request: InterchainGovExecuteMsg,
+        as_acc: Option<&Account<Env>>,
+    ) -> anyhow::Result<Env::Response> {
+        Ok(self.gov.execute(
+            &AdapterRequestMsg {
+                proxy_address: Some(as_acc.unwrap_or(self.gov.account()).proxy()?.to_string()),
+                request,
+            }
+            .into(),
+            None,
+        )?)
     }
 
     pub fn chain_id(&self) -> String {

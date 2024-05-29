@@ -3,9 +3,9 @@ use crate::{
     msg::{ConfigResponse, InterchainGovQueryMsg},
 };
 
-use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult};
 use crate::msg::MembersResponse;
-use crate::state::{MEMBERS};
+use crate::state::MEMBERS;
+use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult};
 
 pub fn query_handler(
     deps: Deps,
