@@ -4,6 +4,7 @@ use crate::{
 };
 
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult};
+use crate::handlers::instantiate::get_item_state;
 use crate::msg::MembersResponse;
 use crate::state::{MEMBERS};
 
@@ -20,12 +21,13 @@ pub fn query_handler(
     .map_err(Into::into)
 }
 
-fn query_members(p0: Deps) -> StdResult<MembersResponse> {
-    let members = MEMBERS.load(p0.storage)?;
+fn query_members(deps: Deps) -> StdResult<MembersResponse> {
+    let members = MEMBERS.load(deps.storage)?;
+    let state = get_item_state(deps.storage, &MEMBERS)?;
 
     Ok(MembersResponse {
-        members: members.0.members,
-        status: members.1,
+        members: members.members,
+        state,
     })
 }
 

@@ -25,6 +25,8 @@ pub enum StateChange {
 /// REMOTE
 /// Instantiate: members ([B]) -> DNE
 /// Proposal received: members([A, B]) -> proposed, Backup([A])
+
+// TODO: implement KEy
 pub const ITEMS_DATA_STATE: Map<(StorageKey, DataState), StateChange> = Map::new("item_data");
 pub const MAPS_DATA_STATE: Map<(StorageKey, Key, DataState), StateChange> = Map::new("map_data");
 pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
@@ -33,7 +35,7 @@ pub const MEMBERS: Item<Members> = Item::new("members");
 
 pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
 
-pub const PROPOSALS: Map<ProposalId, Proposal> = Map::new("props");
+pub const PROPOSALS: Map<ProposalId, (Proposal, DataState)> = Map::new("props");
 /// Local members to local data status
 /// Remote member statuses
 
@@ -48,6 +50,9 @@ pub enum DataState {
 }
 
 impl DataState {
+    pub fn is_initiated(&self) -> bool {
+        matches!(self, DataState::Initiate)
+    }
     pub fn is_proposed(&self) -> bool {
         matches!(self, DataState::Proposed)
     }

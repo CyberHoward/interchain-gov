@@ -4,9 +4,11 @@ use cosmwasm_std::{from_json, DepsMut, Env};
 
 use crate::{InterchainGovError, MY_ADAPTER_ID};
 use crate::contract::{AdapterResult, InterchainGov};
+use crate::handlers::instantiate::get_item_state;
 use crate::msg::InterchainGovIbcMsg;
 use crate::state::MEMBERS;
 
+/// TODO
 pub fn module_ibc_handler(
     deps: DepsMut,
     _env: Env,
@@ -32,15 +34,15 @@ pub fn module_ibc_handler(
     match ibc_msg {
         InterchainGovIbcMsg::UpdateMembers { members } => {
             // check that the data has been finalized before
-            let members_state = MEMBERS.load(deps.storage)?.1;
-            if !members_state.is_finalized() {
+            let state = get_item_state(deps.storage, &MEMBERS)?;
+            if !state.is_finalized() {
                 return Err(InterchainGovError::DataNotFinalized {
                     key: "members".to_string(),
-                    state: members_state,
+                    state,
                 });
             }
 
-            Ok(app.response("module_ibc").add_message(msg))
+            Ok(app.response("module_ibc"))
         }
         _ => Err(InterchainGovError::UnauthorizedIbcMessage {}),
     }

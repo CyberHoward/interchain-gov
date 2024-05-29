@@ -25,7 +25,7 @@ pub fn proposal_callback(
                     chain,
                     ..
                 } => {
-                    if ibc_msg.msg.some() {
+                    if ibc_msg.msg.is_some() {
                         return Err(InterchainGovError::UnknownCallbackMessage(ibc_msg.id))
                     }
 

@@ -26,7 +26,7 @@ const INTERCHAIN_GOV: InterchainGov = InterchainGov::new(MY_ADAPTER_ID, ADAPTER_
     .with_dependencies(&[IBC_CLIENT_DEP]);
 
 // Export handlers
-#[cfg(feature = "export")
+#[cfg(feature = "export")]
 abstract_adapter::export_endpoints!(INTERCHAIN_GOV, InterchainGov);
 
 abstract_adapter::cw_orch_interface!(

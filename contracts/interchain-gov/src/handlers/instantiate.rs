@@ -10,7 +10,7 @@ use cw_storage_plus::{Item, Map};
 use schemars::_serde_json::error::Category::Data;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use crate::state::{ITEMS_DATA_STATE, DataState, PROPOSAL_SEQ, StateChange, StorageKey};
+use crate::state::{ITEMS_DATA_STATE, DataState, StateChange, StorageKey};
 
 pub fn instantiate_handler(
     deps: DepsMut,
@@ -32,11 +32,11 @@ pub fn propose_item_state<'a, T: Serialize + DeserializeOwned>(
     proposed_state: T,
 )  -> StdResult<()> {
     let key = std::str::from_utf8(item.as_slice())?.to_string();
-    let pending = to_json_binary(proposed_state)?;
+    let pending = to_json_binary(&proposed_state)?;
     ITEMS_DATA_STATE.save(storage, (key, DataState::Initiate), &StateChange::Proposal(pending))
 }
 
-pub fn get_item_state<'a, T>(
+pub fn get_item_state<'a, T: Serialize + DeserializeOwned>(
     storage: &dyn Storage,
     item: &Item<T>,
 ) -> StdResult<DataState> {

@@ -37,7 +37,7 @@ pub enum InterchainGovError {
     #[error("Proposal Already exists")]
     ProposalAlreadyExists(ProposalId),
 
-    #[error("Data {key} not finalized. Status: {status:?}")]
+    #[error("Data {key} not finalized. Status: {state:?}")]
     DataNotFinalized {
         key: String,
         state: DataState
@@ -55,16 +55,27 @@ pub enum InterchainGovError {
     #[error("Unauthorized IBC message")]
     UnauthorizedIbcMessage,
 
-    #[error("IBC Message failed: {:?}")]
+    #[error("IBC Message failed: {0}")]
     IbcFailed(IbcResponseMsg),
 
     #[error("Unknown callback message: {0}")]
     UnknownCallbackMessage(String),
 
-    #[error("{prop_id} on {chain} already has state {state}")]
+    #[error("{prop_id} on {chain} already has state {state:?}")]
     PreExistingProposalState {
         prop_id: ProposalId,
         chain: ChainName,
         state: DataState
-    }
+    },
+
+    #[error("Proposal {0} not found")]
+    ProposalNotFound(String),
+
+    #[error("Proposal {prop_id} not {expected:?} on chain: {chain}, rather {actual:?}")]
+    InvalidProposalState {
+        prop_id: ProposalId,
+        expected: DataState,
+        actual: DataState,
+        chain: ChainName
+    },
 }
