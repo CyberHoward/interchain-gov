@@ -53,7 +53,7 @@ impl<Env: CwEnv> TestEnv<Env> {
         publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<_>>(
             InterchainGovInstantiateMsg {
                 accept_proposal_from_gov: Members {
-                    members: vec![ChainName::from_str("test").unwrap()],
+                    members: vec![ChainName::from_str(A_CHAIN_ID).unwrap(), ChainName::from_str(B_CHAIN_ID).unwrap()],
                 },
             },
         )?;
@@ -252,6 +252,53 @@ mod finalize {
 
     #[test]
     fn happy_finalize() -> anyhow::Result<()> {
+        let interchain = MockBech32InterchainEnv::new(vec![
+            (A_CHAIN_ID, A_CHAIN_ADDR),
+            (B_CHAIN_ID, B_CHAIN_ADDR),
+        ]);
+
+        let a_env = TestEnv::setup(interchain.chain(A_CHAIN_ID)?)?;
+        let b_env = TestEnv::setup(interchain.chain(B_CHAIN_ID)?)?;
+
+        a_env.enable_ibc()?;
+        b_env.enable_ibc()?;
+        ibc_connect_polytone_and_abstract(&interchain, A_CHAIN_ID, B_CHAIN_ID)?;
+
+        let _a_gov = a_env.gov.clone();
+        let _b_gov = b_env.gov.clone();
+
+        a_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
+            members: vec![b_env.chain_name(), a_env.chain_name()].into(),
+        })?;
+
+        b_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
+            members: vec![a_env.chain_name(), b_env.chain_name()].into(),
+        })?;
+
+        // Propose a proposal
+        let (res, prop_id) = a_env.propose_proposal("happy_finalize", vec![])?;
+        interchain.wait_ibc(A_CHAIN_ID, res)?;
+
+        a_env.assert_prop_state(prop_id.clone(), None)?;
+        b_env.assert_prop_state(prop_id.clone(), Some(DataState::Proposed))?;
+
+        // Finalize a proposal
+        let res = a_env.finalize_proposal(prop_id.clone())?;
+        let _analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
+        // TODO: this errs
+        a_env.assert_prop_state(prop_id.clone(), None)?;
+        b_env.assert_prop_state(prop_id, None)?;
+
+        Ok(())
+    }
+}
+
+mod members {
+
+    use super::*;
+
+    #[test]
+    fn happy_member_add() -> anyhow::Result<()> {
         let interchain = MockBech32InterchainEnv::new(vec![
             (A_CHAIN_ID, A_CHAIN_ADDR),
             (B_CHAIN_ID, B_CHAIN_ADDR),

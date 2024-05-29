@@ -80,6 +80,7 @@ fn do_vote(
         Some((prop, Vote::new(vote))),
     )?;
 
+    
     Ok(app
         .response("vote_proposal")
         .add_attribute("prop_id", prop_id))
