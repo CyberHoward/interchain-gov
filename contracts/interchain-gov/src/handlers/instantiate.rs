@@ -5,12 +5,7 @@ use crate::{
 };
 use abstract_adapter::sdk::AbstractResponse;
 
-use crate::state::{DataState, StateChange, StorageKey, ITEMS_DATA_STATE, PROPOSAL_SEQ};
-use cosmwasm_std::{to_json_binary, DepsMut, Env, MessageInfo, Order, StdResult, Storage};
-use cw_storage_plus::{Item, Map};
-use schemars::_serde_json::error::Category::Data;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use cosmwasm_std::{DepsMut, Env, MessageInfo};
 
 pub fn instantiate_handler(
     deps: DepsMut,
@@ -20,7 +15,7 @@ pub fn instantiate_handler(
     msg: InterchainGovInstantiateMsg,
 ) -> AdapterResult {
     MEMBERS.save(deps.storage, &Members::new(&env))?;
-    ALLOW_JOINING_GOV.save(deps.storage, msg.accept_proposal_from_gov.members)?;
+    ALLOW_JOINING_GOV.save(deps.storage, &msg.accept_proposal_from_gov)?;
 
     Ok(app.response("instantiate"))
 }

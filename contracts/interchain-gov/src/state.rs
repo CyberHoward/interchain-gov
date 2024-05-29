@@ -1,12 +1,15 @@
 use std::fmt::Display;
 
 use abstract_adapter::objects::chain_name::ChainName;
+use base64::Engine;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Decimal, Deps, DepsMut, Env, StdResult, Storage};
+use cosmwasm_std::{Addr, Binary, Decimal, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
-use dao_voting::status::Status;
+
 use dao_voting::threshold::{PercentageThreshold, Threshold};
+use ibc_sync_state::MapStateSyncController;
+use members_sync_state::MembersSyncState;
 
 pub type ProposalId = String;
 pub type StorageKey = String;
@@ -21,36 +24,43 @@ pub type Key = String;
 /// Instantiate: members ([B]) -> DNE
 /// Proposal received: members([A, B]) -> proposed, Backup([A])
 
-pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
+// pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
 
 pub(self) const MEMBERS_KEY: &'static str = "members";
-pub(self) const MEMBERS: Item<Members> = Item::new(MEMBERS_KEY);
+pub const MEMBERS: Item<Members> = Item::new(MEMBERS_KEY);
+pub const MEMBERS_STATE_SYNC: MembersSyncState = MembersSyncState::new();
 
 pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
 
-pub const PROPOSALS: Map<ProposalId, Proposal> = Map::new("props");
-
 pub const ALLOW_JOINING_GOV: Item<Members> = Item::new("alw");
+
+pub const PROPOSALS: Map<ProposalId, Proposal> = Map::new("props");
+pub const PROPOSAL_STATE_SYNC: MapStateSyncController<'_, ProposalId, Proposal> =
+    MapStateSyncController::new(PROPOSALS);
+
 /// Local members to local data status
 /// Remote member statuses
 
 pub mod members_sync_state {
-    use cosmwasm_std::{to_json_binary, StdResult, Storage};
+    use abstract_adapter::objects::chain_name::ChainName;
+    use cosmwasm_std::{from_json, to_json_binary, StdResult, Storage};
     use cw_storage_plus::Item;
-    use ibc_sync_state::{DataState, ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
+    use ibc_sync_state::{ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
 
     use super::{Members, MEMBERS_KEY};
 
     pub struct MembersSyncState {
         item_state_controller: ItemStateSyncController,
         members: Item<'static, Members>,
+        outstanding_acks: Item<'static, Vec<ChainName>>,
     }
 
     impl MembersSyncState {
-        pub fn new() -> Self {
+        pub const fn new() -> Self {
             MembersSyncState {
                 item_state_controller: ItemStateSyncController::new(),
                 members: super::MEMBERS,
+                outstanding_acks: Item::new("outstanding_receipts"),
             }
         }
 
@@ -59,9 +69,11 @@ pub mod members_sync_state {
         }
 
         pub fn load_state_change(&self, storage: &dyn Storage) -> SyncStateResult<StateChange> {
-            let state_change = self.item_state_controller.load_state_change(storage, MEMBERS_KEY)?;
+            self.item_state_controller
+                .load_state_change(storage, MEMBERS_KEY)
         }
 
+        // Instantiate state change and register outstanding receipts
         pub fn initiate_members(
             &self,
             storage: &mut dyn Storage,
@@ -69,14 +81,36 @@ pub mod members_sync_state {
         ) -> SyncStateResult<()> {
             self.item_state_controller
                 .assert_finalized(storage, MEMBERS_KEY.to_string())?;
-            self.members.save(storage, &members)?;
-            self.item_state_controller
-                .initiate_item_state(
-                    storage,
-                    MEMBERS_KEY.to_string(),
-                    StateChange::Proposal(to_json_binary(&members)?),
-                )
-                .map_err(Into::into)
+            self.item_state_controller.initiate_item_state(
+                storage,
+                MEMBERS_KEY.to_string(),
+                StateChange::Proposal(to_json_binary(&members)?),
+            )?;
+            let members = self.load_members(storage)?;
+            self.outstanding_acks.save(storage, &members.members)?;
+            Ok(())
+        }
+
+        pub fn apply_ack(
+            &self,
+            storage: &mut dyn Storage,
+            chain: ChainName,
+        ) -> SyncStateResult<Option<ChainName>> {
+            let mut acks = self.outstanding_acks.load(storage)?;
+            // find chain in acks and remove it
+            let receipt_i = acks.iter().position(|c| c == &chain);
+            let ack_chain = match receipt_i {
+                Some(receipt_i) => acks.remove(receipt_i),
+                None => return Ok(None),
+            };
+
+            self.outstanding_acks.save(storage, &acks)?;
+            Ok(Some(ack_chain))
+        }
+
+        pub fn has_outstanding_acks(&self, storage: &dyn Storage) -> StdResult<bool> {
+            let acks = self.outstanding_acks.load(storage)?;
+            Ok(!acks.is_empty())
         }
 
         pub fn propose_members(
@@ -84,7 +118,6 @@ pub mod members_sync_state {
             storage: &mut dyn Storage,
             members: Members,
         ) -> SyncStateResult<()> {
-            self.members.save(storage, &members)?;
             self.item_state_controller.propose_item_state(
                 storage,
                 MEMBERS_KEY.to_string(),
@@ -99,21 +132,26 @@ pub mod members_sync_state {
             // Uses initialized / proposed state None
             members: Option<Members>,
         ) -> SyncStateResult<()> {
-
             let members = {
                 if let Some(members) = members {
                     members
                 } else {
-                    self.load_state_change(storage)?;
+                    let members: Result<Members, _> = match self.load_state_change(storage)? {
+                        StateChange::Proposal(members) => Ok(from_json(&members)?),
+                        _ => Err(SyncStateError::DataNotFinalized {
+                            key: MEMBERS_KEY.to_string(),
+                            state: "Backup".to_string(),
+                        }),
+                    };
+                    members?
                 }
-                members
             };
 
-            self.item_state_controller.finalize_item_state(
-                storage,
-                MEMBERS_KEY.to_string(),
-                StateChange::Proposal(to_json_binary(&members)?),
-            )
+            self.members.save(storage, &members)?;
+
+            self.item_state_controller
+                .finalize_item_state(storage, MEMBERS_KEY.to_string())?;
+            Ok(())
         }
 
         pub fn assert_finalized(&self, storage: &dyn Storage) -> SyncStateResult<()> {
@@ -236,15 +274,7 @@ impl Proposal {
             threshold: Threshold::AbsolutePercentage {
                 percentage: PercentageThreshold::Percent(Decimal::percent(100)),
             },
-            // status: Status::Open
         }
-    }
-
-    pub fn hash(&ProposalMsg) -> String {
-        let hash = <sha2::Sha256 as sha2::Digest>::digest(self.to_string());
-        let prop_id = base64::prelude::BASE64_STANDARD.encode(hash.as_slice());
-        let prop = Proposal::new(proposal, &info.sender, &env);
-
     }
 }
 

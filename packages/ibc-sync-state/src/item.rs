@@ -1,25 +1,8 @@
-use std::fmt::Display;
-
-use abstract_adapter::objects::chain_name::ChainName;
-use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Decimal, Deps, DepsMut, Env, StdResult, Storage};
-use cw_storage_plus::{Item, Map};
-use cw_utils::Expiration;
-use dao_voting::status::Status;
-use dao_voting::threshold::{PercentageThreshold, Threshold};
+use cosmwasm_std::Storage;
+use cw_storage_plus::Map;
 
 use crate::error::SyncStateError;
-use crate::SyncStateResult;
-
-pub type ProposalId = String;
-pub type StorageKey = String;
-pub type Key = String;
-
-#[cw_serde]
-pub enum StateChange {
-    Backup(Binary),
-    Proposal(Binary),
-}
+use crate::{DataState, StateChange, StorageKey, SyncStateResult};
 
 /// LOCAL
 /// Instantiate: members ([A]) -> DNE
@@ -39,7 +22,7 @@ pub struct ItemStateSyncController {
 }
 
 impl ItemStateSyncController {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         ItemStateSyncController {
             state_status_map: ITEMS_DATA_STATE,
         }
@@ -135,34 +118,6 @@ impl ItemStateSyncController {
             return Ok(change);
         } else {
             return Err(SyncStateError::NoProposedState);
-        }
-    }
-}
-
-/// Different statuses for a data item
-#[cw_serde]
-pub enum DataState {
-    Initiate = 0,
-    Proposed = 1,
-}
-
-impl DataState {
-    pub fn to_num(&self) -> u8 {
-        match self {
-            DataState::Initiate => 0,
-            DataState::Proposed => 1,
-        }
-    }
-    pub fn is_proposed(&self) -> bool {
-        matches!(self, DataState::Proposed)
-    }
-}
-
-impl Display for DataState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataState::Initiate => write!(f, "Initiate"),
-            DataState::Proposed => write!(f, "Proposed"),
         }
     }
 }

@@ -2,7 +2,6 @@ use crate::{contract::InterchainGov, state::Members};
 
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::QueryResponses;
-use cosmwasm_std::Binary;
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_adapter::adapter_msg_types!(
@@ -10,7 +9,7 @@ abstract_adapter::adapter_msg_types!(
     InterchainGovExecuteMsg,
     InterchainGovQueryMsg
 );
-use crate::state::{DataState, Proposal, ProposalMsg};
+use crate::state::{Proposal, ProposalMsg};
 
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
@@ -60,14 +59,11 @@ pub enum InterchainGovIbcMsg {
        // }
 }
 
-// #[non_exhaustive]
-// #[cosmwasm_schema::cw_serde]
-// pub enum InterchainGovIbcCallbackMsg {
-//     ProposedProposal {
-//         prop_hash: String,
-//         chain: ChainName
-//     }
-// }
+#[non_exhaustive]
+#[cosmwasm_schema::cw_serde]
+pub enum InterchainGovIbcCallbackMsg {
+    JoinGovProposal { proposed_to: ChainName },
+}
 
 /// App query messages
 #[cosmwasm_schema::cw_serde]
@@ -85,6 +81,5 @@ pub struct ConfigResponse {}
 
 #[cosmwasm_schema::cw_serde]
 pub struct MembersResponse {
-    pub members: Vec<ChainName>,
-    pub status: DataState,
+    pub members: Members,
 }

@@ -3,59 +3,71 @@ use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
 use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo};
 
 use crate::contract::{AdapterResult, InterchainGov};
-use crate::msg::InterchainGovIbcMsg;
-use crate::state::{DataState, PROPOSAL_STATE};
+use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
+use crate::state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::InterchainGovError;
 
 /// Get a callback when a proposal is synced
 pub fn proposal_callback(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     app: InterchainGov,
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
-    match ibc_msg.result {
-        CallbackResult::Execute {
-            initiator_msg,
-            result,
+    match ibc_msg {
+        IbcResponseMsg {
+            id: _,
+            msg: Some(callback_msg),
+            result:
+                CallbackResult::Execute {
+                    initiator_msg,
+                    result: Ok(_),
+                },
         } => {
+            // TODO: move this impl to callback impl
             let initiator_msg: InterchainGovIbcMsg = from_json(initiator_msg)?;
             match initiator_msg {
+                // This is called when you proposed a proposal and are receiving callbacks
                 InterchainGovIbcMsg::ProposeProposal {
                     prop_hash: prop_id,
                     chain,
                     ..
                 } => {
-                    if ibc_msg.msg.some() {
-                        return Err(InterchainGovError::UnknownCallbackMessage(ibc_msg.id));
-                    }
-
-                    if let Some(prev_state) =
-                        PROPOSAL_STATE.may_load(deps.storage, (prop_id.clone(), chain.clone()))?
-                    {
+                    if PROPOSAL_STATE_SYNC.has(deps.storage, prop_id.clone()) {
                         // TODO: check prev state
                         return Err(InterchainGovError::PreExistingProposalState {
                             prop_id: prop_id.clone(),
                             chain: chain.clone(),
-                            state: prev_state,
+                            state: "already exists".to_string(),
                         });
                     }
 
-                    // TODO: check the previous proposal state
-                    PROPOSAL_STATE.save(deps.storage, (prop_id, chain), &DataState::Proposed)?
+                    PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?
                 }
-                // Wrong initiator message
-                _ => unimplemented!(),
+                _ => (),
+            };
+            let callback_msg: InterchainGovIbcCallbackMsg = from_json(callback_msg)?;
+            match callback_msg {
+                InterchainGovIbcCallbackMsg::JoinGovProposal { proposed_to } => {
+                    MEMBERS_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
+
+                    if !MEMBERS_STATE_SYNC.has_outstanding_acks(deps.storage)? {
+                        // finalize my proposal
+                        MEMBERS_STATE_SYNC.finalize_members(deps.storage, None)?;
+                        // send finalization to the other chain
+                        // TODO: Send confirmation to members
+                    }
+                }
             }
         }
-        CallbackResult::Query { .. } => {
-            // TODO: proper error
-            unreachable!()
+        IbcResponseMsg {
+            result: CallbackResult::Execute { result: Err(e), .. },
+            ..
+        } => {
+            return Err(InterchainGovError::IbcFailed(e));
         }
-        CallbackResult::FatalError(_) => {
-            return Err(InterchainGovError::IbcFailed(ibc_msg));
-        }
+        _ => panic!("unexpected callback result"),
     }
 
     Ok(app.response("proposal_callback"))

@@ -23,12 +23,9 @@ pub fn query_handler(
 fn query_members(p0: Deps) -> StdResult<MembersResponse> {
     let members = MEMBERS.load(p0.storage)?;
 
-    Ok(MembersResponse {
-        members: members.0.members,
-        status: members.1,
-    })
+    Ok(MembersResponse { members })
 }
 
-fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
+fn query_config(_deps: Deps) -> StdResult<ConfigResponse> {
     Ok(ConfigResponse {})
 }

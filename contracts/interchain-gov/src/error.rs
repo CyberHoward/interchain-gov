@@ -1,7 +1,7 @@
 use crate::state::ProposalId;
 use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
-use abstract_adapter::std::ibc::IbcResponseMsg;
+
 use abstract_adapter::{sdk::AbstractSdkError, std::AbstractError, AdapterError};
 use cosmwasm_std::StdError;
 use cw_asset::AssetError;
@@ -65,6 +65,8 @@ pub enum InterchainGovError {
     PreExistingProposalState {
         prop_id: ProposalId,
         chain: ChainName,
-        state: DataState,
+        state: String,
     },
+    #[error("Ibc failed: {0}")]
+    IbcFailed(String),
 }

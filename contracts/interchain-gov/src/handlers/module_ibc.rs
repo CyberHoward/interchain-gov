@@ -4,8 +4,8 @@ use cosmwasm_std::{from_json, DepsMut, Env};
 
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::msg::InterchainGovIbcMsg;
-use crate::state::members_sync_state::MembersSyncState;
-use crate::state::ALLOW_JOINING_GOV;
+
+use crate::state::{ALLOW_JOINING_GOV, MEMBERS_STATE_SYNC};
 use crate::{InterchainGovError, MY_ADAPTER_ID};
 
 pub fn module_ibc_handler(
@@ -31,7 +31,7 @@ pub fn module_ibc_handler(
     match ibc_msg {
         InterchainGovIbcMsg::JoinGovProposal { members } => {
             // Check that the data has been finalized before.
-            MembersSyncState::new().assert_finalized(deps.storage)?;
+            MEMBERS_STATE_SYNC.assert_finalized(deps.storage)?;
 
             let allowed_gov = ALLOW_JOINING_GOV.load(deps.storage)?;
 
@@ -40,9 +40,9 @@ pub fn module_ibc_handler(
                 return Err(InterchainGovError::UnauthorizedIbcMessage {});
             }
 
-            MembersSyncState::new().finalize_members(deps.storage, Some(members))?;
+            MEMBERS_STATE_SYNC.finalize_members(deps.storage, Some(members))?;
 
-            Ok(app.response("module_ibc").add_message(msg))
+            Ok(app.response("module_ibc"))
         }
         _ => Err(InterchainGovError::UnauthorizedIbcMessage {}),
     }
