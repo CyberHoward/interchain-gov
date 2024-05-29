@@ -71,13 +71,15 @@ pub fn finalize_callback(
         },
         CallbackResult::Query { .. } => {
             // TODO: proper error
-            unreachable!()
+            unreachable!("finalize_callback")
         },
         CallbackResult::FatalError(_) => {
             println!("Fatal error");
             return Err(InterchainGovError::IbcFailed(ibc_msg));
         }
     }
+
+    println!("finalize_callback done");
 
     Ok(app.response("finalize_callback"))
 }

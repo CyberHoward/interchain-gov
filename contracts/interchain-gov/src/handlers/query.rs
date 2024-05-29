@@ -6,8 +6,8 @@ use crate::{
 
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult, Order};
 use crate::handlers::instantiate::get_item_state;
-use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse, VoteResponse};
-use crate::state::{GovernanceVote, MEMBERS, ProposalId, PROPOSALS, VOTE};
+use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse, VoteResponse, VoteResultsResponse};
+use crate::state::{GovernanceVote, MEMBERS, ProposalId, PROPOSALS, VOTE, VOTE_RESULTS};
 
 pub fn query_handler(
     deps: Deps,
@@ -21,10 +21,10 @@ pub fn query_handler(
         InterchainGovQueryMsg::Proposal { prop_id } => to_json_binary(&query_proposal(deps, prop_id)?),
         InterchainGovQueryMsg::ListProposals { } => to_json_binary(&query_proposals(deps)?),
         InterchainGovQueryMsg::Vote { prop_id } => to_json_binary(&query_vote(deps, env, prop_id)?),
+        InterchainGovQueryMsg::VoteResults { prop_id } => to_json_binary(&query_vote_results(deps, env, prop_id)?),
     }
     .map_err(Into::into)
 }
-
 fn query_proposals(deps: Deps) -> StdResult<ProposalsResponse> {
     let proposals = PROPOSALS.range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<_>>>()?;
 
@@ -76,5 +76,14 @@ fn query_vote(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteRespon
         governance,
         prop_id,
         chain: ChainName::new(&env)
+    })
+}
+
+fn query_vote_results(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteResultsResponse> {
+    let results = VOTE_RESULTS.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
+
+    Ok(crate::msg::VoteResultsResponse {
+        prop_id,
+        results
     })
 }

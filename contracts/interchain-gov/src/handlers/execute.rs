@@ -15,7 +15,7 @@ use crate::{
     msg::InterchainGovExecuteMsg,
 };
 use crate::handlers::instantiate::{get_item_state, propose_item_state};
-use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID};
+use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID, FINALIZE_CALLBACK_ID};
 use crate::msg::{InterchainGovIbcMsg, InterchainGovQueryMsg};
 use crate::state::{DataState, VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members, VOTES, Governance, TEMP_REMOTE_GOV_MODULE_ADDRS, GovernanceVote, VOTE_RESULTS};
 
@@ -33,8 +33,17 @@ pub fn execute_handler(
         InterchainGovExecuteMsg::VoteProposal { prop_id, vote, governance } => do_vote(deps, env, adapter, prop_id, vote, governance),
         InterchainGovExecuteMsg::RequestVoteResults { prop_id } => request_vote_results(deps, env, adapter, prop_id),
         InterchainGovExecuteMsg::TestAddMembers { members } => test_add_members(deps, adapter, members),
+        InterchainGovExecuteMsg::TemporaryRegisterRemoteGovModuleAddrs { modules } => temporary_register_remote_gov_module_addrs(deps, adapter, modules),
         _ => todo!()
     }
+}
+
+fn temporary_register_remote_gov_module_addrs(deps: DepsMut, app: InterchainGov, modules: Vec<(ChainName, String)>) -> AdapterResult {
+    for (chain, addr) in modules {
+        TEMP_REMOTE_GOV_MODULE_ADDRS.save(deps.storage, &chain, &addr)?;
+    }
+
+    Ok(app.response("register_remote_gov_module_addrs"))
 }
 
 fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String) -> AdapterResult {
@@ -120,7 +129,8 @@ fn load_proposal(storage: &mut dyn Storage, prop_id: &String) -> Result<(Proposa
 }
 
 // This currently allows for overriding votes
-fn do_vote(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String, vote: bool, governance: Governance) -> AdapterResult {
+fn do_vote(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String, vote: Vote, governance: Governance) -> AdapterResult {
+    println!("Voting on proposal: {:?} with vote: {:?}", prop_id, vote);
     let (prop, state) = load_proposal(deps.storage, &prop_id)?;
 
     state.expect_or(DataState::Finalized, |actual| InterchainGovError::InvalidProposalState {
@@ -134,7 +144,7 @@ fn do_vote(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String, vote: b
         return Err(InterchainGovError::ProposalExpired(prop_id.clone()));
     }
 
-    let vote = if vote { Vote::Yes } else { Vote::No };
+    // TODO: check governance?
     VOTE.save(deps.storage, prop_id.clone(), &GovernanceVote::new(governance, vote))?;
 
     Ok(app.response("vote_proposal").add_attribute("prop_id", prop_id))
@@ -239,7 +249,7 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
     }
 
     let target_module = this_module(&app)?;
-    let callback = CallbackInfo::new(REGISTER_VOTE_ID, None);
+    let callback = CallbackInfo::new(FINALIZE_CALLBACK_ID, None);
 
     let external_members = load_external_members(deps.storage, &env)?;
     let finalize_messages = external_members.iter().map(|host| {

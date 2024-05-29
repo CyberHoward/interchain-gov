@@ -5,7 +5,7 @@ use cosmwasm_schema::QueryResponses;
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_adapter::adapter_msg_types!(InterchainGov, InterchainGovExecuteMsg, InterchainGovQueryMsg);
-use crate::state::{DataState, Governance, Proposal, ProposalId, ProposalMsg, Vote};
+use crate::state::{DataState, Governance, GovernanceVote, Proposal, ProposalId, ProposalMsg, Vote};
 
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
@@ -34,7 +34,7 @@ pub enum InterchainGovExecuteMsg {
     VoteProposal {
         prop_id: String,
         governance: Governance,
-        vote: bool,
+        vote: Vote,
     },
     /// Can be called by any chain to trigger tallying
     RequestVoteResults {
@@ -110,6 +110,11 @@ pub enum InterchainGovQueryMsg {
         prop_id: ProposalId,
         // chain: Option<ChainName>
     },
+
+    #[returns(VoteResultsResponse)]
+    VoteResults {
+        prop_id: ProposalId,
+    },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -140,4 +145,10 @@ pub struct VoteResponse {
     pub chain: ChainName,
     pub governance: Governance,
     pub vote: Vote,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct VoteResultsResponse {
+    pub prop_id: ProposalId,
+    pub results: Vec<(ChainName, Option<GovernanceVote>)>
 }

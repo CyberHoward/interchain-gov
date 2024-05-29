@@ -12,6 +12,7 @@ use speculoos::prelude::*;
 
 use abstract_interchain_tests::setup::ibc_connect_polytone_and_abstract;
 use cw_orch::mock::cw_multi_test::{AppResponse};
+use cw_utils::Expiration;
 use interchain_gov::state::{DataState, ProposalAction, ProposalId, ProposalMsg};
 // use cw_orch_interchain::MockBech32InterchainEnv;
 
@@ -21,6 +22,7 @@ const A_CHAIN_ADDR: &str = "neutron18k2uq7srsr8lwrae6zr0qahpn29rsp7tu2m2ea";
 const B_CHAIN_ADDR: &str = "kujira18k2uq7srsr8lwrae6zr0qahpn29rsp7tfassws";
 
 struct TestEnv<Env: CwEnv> {
+    // FEEDBACK: the trait `Clone` is not implemented for `Publisher<Env>`
     publisher: Publisher<Env>,
     abs: AbstractClient<Env>,
     gov: Application<Env, InterchainGovInterface<Env>>,
@@ -81,7 +83,9 @@ impl<Env: CwEnv> TestEnv<Env> {
     }
 
     // helpers
-
+    fn wait_blocks(&self, amount: u64) -> anyhow::Result<()> {
+        Ok(self.environment().wait_blocks(amount)?)
+    }
 }
 
 impl<Chain: CwEnv> Environment<Chain> for TestEnv<Chain> {
@@ -89,6 +93,8 @@ impl<Chain: CwEnv> Environment<Chain> for TestEnv<Chain> {
         self.abs.environment()
     }
 }
+
+const TEST_PROP_LEN: u64 = 1000;
 
 impl TestEnv<MockBech32> {
     pub fn execute_gov_for(&self, request: InterchainGovExecuteMsg, for_acc: Option<&Account<MockBech32>>) -> anyhow::Result<AppResponse> {
@@ -105,7 +111,7 @@ impl TestEnv<MockBech32> {
 
     fn propose_proposal(&self, title: &str, actions: Vec<ProposalAction>) -> anyhow::Result<(AppResponse, ProposalId)> {
         let res = self.execute_gov(InterchainGovExecuteMsg::Propose {
-            proposal: test_proposal(title, actions)
+            proposal: test_proposal(title, actions, self.environment().block_info()?.height + TEST_PROP_LEN)
         })?;
 
         let props = self.gov.list_proposals()?.proposals;
@@ -127,14 +133,24 @@ impl TestEnv<MockBech32> {
         assert_that!(state).is_equal_to(expected_state);
         Ok(())
     }
+
+    fn test_register_gov_modules(&self, govs: Vec<(ChainName, InterchainGovInterface<MockBech32>)>) -> anyhow::Result<()> {
+        let modules = govs.into_iter().map(|(chain_name, gov)| {
+            (chain_name, gov.address().unwrap().to_string())
+        }).collect();
+        self.execute_gov(InterchainGovExecuteMsg::TemporaryRegisterRemoteGovModuleAddrs {
+            modules
+        })?;
+        Ok(())
+    }
 }
 
-fn test_proposal(title: impl Into<String>, actions: Vec<ProposalAction>) -> ProposalMsg {
+fn test_proposal(title: impl Into<String>, actions: Vec<ProposalAction>, exp_height: u64) -> ProposalMsg {
     ProposalMsg {
         title: title.into(),
         description: "This is a test proposal".to_string(),
         min_voting_period: None,
-        expiration: Default::default(),
+        expiration: Expiration::AtHeight(exp_height),
         actions
     }
 }
@@ -203,6 +219,83 @@ mod propose {
         // should be proposed on A and pending on B
         a_env.assert_prop_state(prop_id.clone(), DataState::Proposed)?;
         b_env.assert_prop_state(prop_id, DataState::Initiated)?;
+
+        Ok(())
+    }
+}
+
+mod query_vote_results {
+    use interchain_gov::state::{Governance, Vote};
+    use super::*;
+
+    #[test]
+    fn happy_query() -> anyhow::Result<()> {
+        let interchain = MockBech32InterchainEnv::new(vec![
+            (A_CHAIN_ID, A_CHAIN_ADDR),
+            (
+                B_CHAIN_ID,
+                B_CHAIN_ADDR
+            ),
+        ]);
+
+        let a_env = TestEnv::setup(interchain.chain(A_CHAIN_ID)?)?;
+        let b_env = TestEnv::setup(interchain.chain(B_CHAIN_ID)?)?;
+
+        a_env.enable_ibc()?;
+        b_env.enable_ibc()?;
+        ibc_connect_polytone_and_abstract(&interchain, A_CHAIN_ID, B_CHAIN_ID)?;
+        a_env.test_register_gov_modules(vec![(b_env.chain_name(), b_env.gov.clone())])?;
+
+
+        let a_gov = a_env.gov.clone();
+        let b_gov = b_env.gov.clone();
+
+        a_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
+            members: vec![b_env.chain_name()],
+        })?;
+
+        b_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
+            members: vec![a_env.chain_name()],
+        })?;
+
+        // Create proposal
+        let (res, prop_id) = a_env.propose_proposal("happy_propose", vec![])?;
+        interchain.wait_ibc(A_CHAIN_ID, res)?;
+        // Finalize a proposal
+        let res = a_env.finalize_proposal(prop_id.clone())?;
+        interchain.wait_ibc(A_CHAIN_ID, res)?;
+
+        // Vote on the proposal
+        a_env.execute_gov(InterchainGovExecuteMsg::VoteProposal {
+            prop_id: prop_id.clone(),
+            governance: Governance::Manual {},
+            vote: Vote::Yes,
+        })?;
+        let a_vote = a_gov.vote(prop_id.clone())?;
+        assert_that!(a_vote.vote).is_equal_to(Vote::Yes);
+
+        b_env.execute_gov(InterchainGovExecuteMsg::VoteProposal {
+            prop_id: prop_id.clone(),
+            governance: Governance::Manual {},
+            vote: Vote::Yes,
+        })?;
+        let vote = b_gov.vote(prop_id.clone())?;
+        assert_that!(vote.vote).is_equal_to(Vote::Yes);
+
+        // Wait the test blocks after voting
+        a_env.wait_blocks(TEST_PROP_LEN + 1)?;
+        b_env.wait_blocks(TEST_PROP_LEN + 1)?;
+
+        // Request vote results
+        let res = a_env.execute_gov(InterchainGovExecuteMsg::RequestVoteResults {
+            prop_id: prop_id.clone(),
+        })?;
+
+        let analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
+
+        let vote_results = a_gov.vote_results(prop_id.clone())?;
+        println!("Vote results: {:?}", vote_results);
+
 
         Ok(())
     }

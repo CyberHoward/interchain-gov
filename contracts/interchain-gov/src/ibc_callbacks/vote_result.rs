@@ -85,7 +85,7 @@ pub fn vote_result_callback(
             })?;
         },
         CallbackResult::Execute { initiator_msg, result } => {
-            unreachable!("Execute callback")
+            unreachable!("vote_result Execute callback")
         },
         CallbackResult::FatalError(_) => {
             println!("Fatal error");
@@ -93,5 +93,5 @@ pub fn vote_result_callback(
         }
     }
 
-    Ok(app.response("finalize_callback"))
+    Ok(app.response("vote_result_callback"))
 }

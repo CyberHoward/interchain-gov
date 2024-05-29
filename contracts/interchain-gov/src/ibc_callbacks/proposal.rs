@@ -67,7 +67,7 @@ pub fn proposal_callback(
         },
         CallbackResult::Query { .. } => {
             // TODO: proper error
-            unreachable!()
+            unreachable!("proposal_callback")
         },
         CallbackResult::FatalError(_) => {
             return Err(InterchainGovError::IbcFailed(ibc_msg));

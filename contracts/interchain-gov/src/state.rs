@@ -160,7 +160,8 @@ pub enum Governance {
     DaoDao {
         dao_address: String,
         proposal_id: u64
-    }
+    },
+    Manual {}
 }
 
 #[cw_serde]
