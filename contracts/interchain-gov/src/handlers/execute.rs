@@ -7,7 +7,7 @@ use abstract_adapter::std::ibc::CallbackInfo;
 use abstract_adapter::std::ibc_client::state::IBC_INFRA;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult};
+use cosmwasm_std::{CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, to_json_string};
 
 use crate::{
     contract::{AdapterResult, InterchainGov},
@@ -17,7 +17,7 @@ use crate::{
 use crate::handlers::instantiate::{get_item_state, propose_item_state};
 use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID};
 use crate::msg::{InterchainGovIbcMsg};
-use crate::state::{DataState, ITEMS_DATA_STATE, LOCAL_VOTE, MEMBERS, Proposal, PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, StorageKey, Vote};
+use crate::state::{DataState, LOCAL_VOTE, MEMBERS, Proposal, PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote};
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -50,7 +50,7 @@ fn propose(
     proposal: ProposalMsg,
 ) -> AdapterResult {
     // 1.
-    let hash = <sha2::Sha256 as sha2::Digest>::digest(&proposal.clone());
+    let hash = <sha2::Sha256 as sha2::Digest>::digest(to_json_string(&proposal)?);
     let prop_id: ProposalId = format!("{:?}", hash);
     let prop = Proposal::new(proposal, &info.sender, &env);
     // check that prop doesn't exist
@@ -66,7 +66,6 @@ fn propose(
     LOCAL_VOTE.save(deps.storage, prop_id.clone(), &Vote::Yes)?;
 
     // 3.
-    let ibc_client = app.ibc_client(deps.as_ref());
     let target_module = this_module(&app)?;
 
     let callback = CallbackInfo::new(PROPOSE_CALLBACK_ID, None);
@@ -74,13 +73,16 @@ fn propose(
     let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
 
     let propose_msgs = external_members.iter().map(|host| {
-        PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host.clone()), &DataState::Initiate)?;
 
-        ibc_client.module_ibc_action(host.to_string(), target_module, &InterchainGovIbcMsg::ProposeProposal {
+        let ibc_client = app.ibc_client(deps.as_ref());
+        let msg = ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::ProposeProposal {
             prop: prop.clone(),
             prop_hash: prop_id.clone(),
             chain: host.clone(),
-        }, Some(callback.clone()))
+        }, Some(callback.clone()))?;
+
+        PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host), &DataState::Initiate)?;
+        Ok(msg)
     }).collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
 
     Ok(app.response("propose").add_attribute("prop_id", prop_id).add_messages(propose_msgs))
@@ -102,12 +104,12 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
     }
 
     // ensure that all remote chains are in proposed state
-    let prop_states = PROPOSAL_STATE.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<((ProposalId, ChainName), DataState)>>>()?;
-    for ((_, chain), state) in prop_states {
+    let prop_states = PROPOSAL_STATE.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, DataState)>>>()?;
+    for (chain, state) in prop_states {
         if !state.is_proposed() {
             return Err(InterchainGovError::InvalidProposalState {
                 prop_id: prop_id.clone(),
-                chain,
+                chain: chain.clone(),
                 expected: DataState::Proposed,
                 actual: state,
             });
@@ -120,7 +122,7 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
 
     let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
     let finalize_messages = external_members.iter().map(|host| {
-        ibc_client.module_ibc_action(host.to_string(), target_module, &InterchainGovIbcMsg::FinalizeProposal {
+        ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::FinalizeProposal {
             prop_hash: prop_id.clone(),
             chain: host.clone(),
         }, Some(callback.clone()))
@@ -151,7 +153,6 @@ fn invite_member(
     // check that all our other chains have been finalized?
 
 
-    let ibc_client = app.ibc_client(deps.as_ref());
 
     // Now that there's a new member, check that they're in the list of proxies
     let ibc_host_addr = app.ibc_host(deps.as_ref())?;
@@ -166,8 +167,8 @@ fn invite_member(
 
     propose_item_state(deps.storage, &MEMBERS, members.clone())?;
 
+    let ibc_client = app.ibc_client(deps.as_ref());
     let target_module = this_module(&app)?;
-
 
     // let ibc_register_msg = ibc_client.module_ibc_action(new_members.to_string(), target_module, &InterchainGovIbcMsg::SyncState {
     //     key: "members".to_string(),

@@ -55,7 +55,7 @@ pub enum InterchainGovError {
     #[error("Unauthorized IBC message")]
     UnauthorizedIbcMessage,
 
-    #[error("IBC Message failed: {0}")]
+    #[error("IBC Message failed: {0:?}")]
     IbcFailed(IbcResponseMsg),
 
     #[error("Unknown callback message: {0}")]

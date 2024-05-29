@@ -3,14 +3,14 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Binary, Decimal, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
-use dao_voting::{status::Status};
 use dao_voting::threshold::{PercentageThreshold, Threshold};
-
+pub use crate::data_state::DataState;
 
 pub type ProposalId = String;
 pub type StorageKey = String;
 pub type Key = String;
 
+#[cw_serde]
 pub enum StateChange {
     Backup(Binary),
     Proposal(Binary),
@@ -29,38 +29,13 @@ pub enum StateChange {
 // TODO: implement KEy
 pub const ITEMS_DATA_STATE: Map<(StorageKey, DataState), StateChange> = Map::new("item_data");
 pub const MAPS_DATA_STATE: Map<(StorageKey, Key, DataState), StateChange> = Map::new("map_data");
-pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
+pub const PROPOSAL_STATE: Map<(ProposalId, &ChainName), DataState> = Map::new("prop_state");
 
 pub const MEMBERS: Item<Members> = Item::new("members");
 
 pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
 
 pub const PROPOSALS: Map<ProposalId, (Proposal, DataState)> = Map::new("props");
-/// Local members to local data status
-/// Remote member statuses
-
-// Mabye we should do Map<Key, DataStatus>
-
-/// Different statuses for a data item
-#[cw_serde]
-pub enum DataState {
-    Initiate = 0,
-    Proposed = 1,
-    Finalized = 2,
-}
-
-impl DataState {
-    pub fn is_initiated(&self) -> bool {
-        matches!(self, DataState::Initiate)
-    }
-    pub fn is_proposed(&self) -> bool {
-        matches!(self, DataState::Proposed)
-    }
-
-    pub fn is_finalized(&self) -> bool {
-        matches!(self, DataState::Finalized)
-    }
-}
 
 #[cw_serde]
 pub struct Members {

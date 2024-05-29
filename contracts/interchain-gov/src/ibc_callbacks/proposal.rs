@@ -29,7 +29,7 @@ pub fn proposal_callback(
                         return Err(InterchainGovError::UnknownCallbackMessage(ibc_msg.id))
                     }
 
-                    if let Some(prev_state) = PROPOSAL_STATE.may_load(deps.storage, (prop_id.clone(), chain.clone()))? {
+                    if let Some(prev_state) = PROPOSAL_STATE.may_load(deps.storage, (prop_id.clone(), &chain))? {
                         // TODO: check prev state
                         return Err(InterchainGovError::PreExistingProposalState {
                             prop_id: prop_id.clone(),
@@ -39,7 +39,7 @@ pub fn proposal_callback(
                     }
 
                     // TODO: check the previous proposal state
-                    PROPOSAL_STATE.save(deps.storage, (prop_id, chain), &DataState::Proposed)?
+                    PROPOSAL_STATE.save(deps.storage, (prop_id, &chain), &DataState::Proposed)?
                 }
                 // Wrong initiator message
                 _ => unimplemented!()

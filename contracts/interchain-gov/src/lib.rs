@@ -6,6 +6,7 @@ pub mod msg;
 pub mod state;
 mod dependencies;
 mod ibc_callbacks;
+pub mod data_state;
 
 pub use contract::interface::InterchainGovInterface;
 pub use error::InterchainGovError;

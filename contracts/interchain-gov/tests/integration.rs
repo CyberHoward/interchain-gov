@@ -1,18 +1,15 @@
-use std::str::FromStr;
 use abstract_adapter::objects::chain_name::ChainName;
 use interchain_gov::{
     contract::interface::InterchainGovInterface,
-    msg::{ConfigResponse, ExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
-    InterchainGovExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
+    msg::{ConfigResponse, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
+    InterchainGovExecuteMsg, MY_NAMESPACE,
 };
 
 use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_adapter::std::manager::ExecuteMsgFns;
 use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
-use cosmwasm_std::coins;
 // Use prelude to get all the necessary imports
 use cw_orch::{anyhow, prelude::*};
-use cw_orch::mock::cw_multi_test::AppResponse;
 use speculoos::prelude::*;
 
 struct TestEnv<Env: CwEnv> {
