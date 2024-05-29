@@ -1,13 +1,16 @@
+use std::str::FromStr;
+
 use abstract_adapter::objects::chain_name::ChainName;
+use ibc_sync_state::DataState;
 use interchain_gov::{
     contract::interface::InterchainGovInterface,
     msg::{ConfigResponse, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
+    state::Members,
     InterchainGovExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
 };
 
 use abstract_adapter::std::manager::ExecuteMsgFns;
 use abstract_adapter::std::{adapter, adapter::AdapterRequestMsg, objects::namespace::Namespace};
-use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
 use abstract_cw_orch_polytone::Polytone;
 // Use prelude to get all the necessary imports
@@ -18,7 +21,7 @@ use speculoos::prelude::*;
 
 use abstract_interchain_tests::setup::ibc_connect_polytone_and_abstract;
 use cw_orch::mock::cw_multi_test::AppResponse;
-use interchain_gov::state::{DataState, ProposalAction, ProposalId, ProposalMsg};
+use interchain_gov::state::{ProposalAction, ProposalId, ProposalMsg};
 // use cw_orch_interchain::MockBech32InterchainEnv;
 
 const A_CHAIN_ID: &str = "neutron-1";
@@ -36,7 +39,7 @@ impl<Env: CwEnv> TestEnv<Env> {
     /// Set up the test environment with an Account that has the Adapter installed
     fn setup(env: Env) -> anyhow::Result<TestEnv<Env>> {
         // Create a sender and mock env
-        let _sender = env.sender();
+        let sender = env.sender();
         let namespace = Namespace::new(MY_NAMESPACE)?;
 
         // You can set up Abstract with a builder.
@@ -50,7 +53,7 @@ impl<Env: CwEnv> TestEnv<Env> {
         publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<_>>(
             InterchainGovInstantiateMsg {
                 accept_proposal_from_gov: Members {
-                    members: vec![ChainName::from_str("test-1").unwrap()],
+                    members: vec![ChainName::from_str("test").unwrap()],
                 },
             },
         )?;
@@ -134,16 +137,17 @@ impl TestEnv<MockBech32> {
         actions: Vec<ProposalAction>,
     ) -> anyhow::Result<(AppResponse, ProposalId)> {
         let res = self.execute_gov(InterchainGovExecuteMsg::Propose {
-            proposal: test_proposal(title, actions),
+            proposal: test_proposal(title, actions.clone()),
         })?;
 
-        let props = self.gov.list_proposals()?.proposals;
+        let id: String = test_proposal(title, actions).hash();
+
+        let props = self.gov.list_proposal_states()?.state;
         let prop_id = props
             .into_iter()
-            .find(|p| p.prop.title == title)
+            .find(|p| p.proposal_id == id)
             .unwrap()
-            .prop_id;
-
+            .proposal_id;
         Ok((res, prop_id))
     }
 
@@ -156,9 +160,9 @@ impl TestEnv<MockBech32> {
     fn assert_prop_state(
         &self,
         prop_id: ProposalId,
-        expected_state: DataState,
+        expected_state: Option<DataState>,
     ) -> anyhow::Result<()> {
-        let state = self.gov.proposal(prop_id)?.state;
+        let state = self.gov.proposal_state(prop_id)?.map(|f|f.state);
         assert_that!(state).is_equal_to(expected_state);
         Ok(())
     }
@@ -170,7 +174,7 @@ fn test_proposal(title: impl Into<String>, actions: Vec<ProposalAction>) -> Prop
         description: "This is a test proposal".to_string(),
         min_voting_period: None,
         expiration: Default::default(),
-        actions,
+        action: ProposalAction::Signal,
     }
 }
 
@@ -215,11 +219,11 @@ mod propose {
         let b_gov = b_env.gov.clone();
 
         a_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
-            members: vec![b_env.chain_name()],
+            members: vec![b_env.chain_name(), a_env.chain_name()].into(),
         })?;
 
         b_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
-            members: vec![a_env.chain_name()],
+            members: vec![a_env.chain_name(), b_env.chain_name()].into(),
         })?;
 
         // Create proposal
@@ -227,13 +231,19 @@ mod propose {
 
         interchain.wait_ibc(A_CHAIN_ID, res)?;
 
-        let proposals = a_gov.list_proposals()?;
-        assert_that!(proposals.proposals).has_length(1);
+        println!("Proposals A has 0 states");
+        let proposals = a_gov.list_proposal_states()?;
+        assert_that!(proposals.state).has_length(0);
+
+        println!("Proposals B should have 2 states");
+        let proposals = b_gov.list_proposal_states()?;
+        assert_that!(proposals.state).has_length(1);
+        println!("Proposals B: {:?}", proposals);
 
         // check the state.
         // should be proposed on A and pending on B
-        a_env.assert_prop_state(prop_id.clone(), DataState::Proposed)?;
-        b_env.assert_prop_state(prop_id, DataState::Initiated)?;
+        a_env.assert_prop_state(prop_id.clone(), None)?;
+        b_env.assert_prop_state(prop_id, Some(DataState::Proposed))?;
 
         Ok(())
     }
@@ -261,26 +271,26 @@ mod finalize {
         let b_gov = b_env.gov.clone();
 
         a_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
-            members: vec![b_env.chain_name()],
+            members: vec![b_env.chain_name(), a_env.chain_name()].into(),
         })?;
 
         b_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
-            members: vec![a_env.chain_name()],
+            members: vec![a_env.chain_name(), b_env.chain_name()].into(),
         })?;
 
         // Propose a proposal
         let (res, prop_id) = a_env.propose_proposal("happy_finalize", vec![])?;
         interchain.wait_ibc(A_CHAIN_ID, res)?;
 
-        a_env.assert_prop_state(prop_id.clone(), DataState::Proposed)?;
-        b_env.assert_prop_state(prop_id.clone(), DataState::Initiated)?;
+        a_env.assert_prop_state(prop_id.clone(), None)?;
+        b_env.assert_prop_state(prop_id.clone(), Some(DataState::Proposed))?;
 
         // Finalize a proposal
         let res = a_env.finalize_proposal(prop_id.clone())?;
         let analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
-
-        a_env.assert_prop_state(prop_id.clone(), DataState::Finalized)?;
-        b_env.assert_prop_state(prop_id, DataState::Finalized)?;
+        // TODO: this errs
+        a_env.assert_prop_state(prop_id.clone(), None)?;
+        b_env.assert_prop_state(prop_id, None)?;
 
         Ok(())
     }

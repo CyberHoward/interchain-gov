@@ -46,7 +46,7 @@ impl ItemStateSyncController {
     ) -> SyncStateResult<StateChange> {
         let key = key.into();
         let state_change = self
-            .load(storage, (key.clone(), DataState::Initiate))
+            .load(storage, (key.clone(), DataState::Initiated))
             .or_else(|_| self.load(storage, (key.clone(), DataState::Proposed)))
             .ok();
         state_change.ok_or(SyncStateError::NoProposedState)
@@ -60,7 +60,7 @@ impl ItemStateSyncController {
         let key = key.into();
         if self
             .state_status_map
-            .has(storage, (key.clone(), DataState::Initiate.to_num()))
+            .has(storage, (key.clone(), DataState::Initiated.to_num()))
             || self
                 .state_status_map
                 .has(storage, (key.clone(), DataState::Proposed.to_num()))
@@ -91,7 +91,7 @@ impl ItemStateSyncController {
         state: StateChange,
     ) -> SyncStateResult<()> {
         self.state_status_map
-            .save(storage, (key.into(), DataState::Initiate.to_num()), &state)
+            .save(storage, (key.into(), DataState::Initiated.to_num()), &state)
             .map_err(Into::into)
     }
     // Remove init / proposed states
@@ -104,10 +104,10 @@ impl ItemStateSyncController {
         // remove any of the states
         if let Some(change) = self
             .state_status_map
-            .may_load(storage, (key.clone(), DataState::Initiate.to_num()))?
+            .may_load(storage, (key.clone(), DataState::Initiated.to_num()))?
         {
             self.state_status_map
-                .remove(storage, (key.clone(), DataState::Initiate.to_num()));
+                .remove(storage, (key.clone(), DataState::Initiated.to_num()));
             return Ok(change);
         } else if let Some(change) = self
             .state_status_map

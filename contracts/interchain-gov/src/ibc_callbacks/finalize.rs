@@ -4,7 +4,7 @@ use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo, Order, StdResult};
 
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
-use crate::state::{Proposal, MEMBERS_STATE_SYNC};
+use crate::state::{Proposal, MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::InterchainGovError;
 
 /// Get a callback when a proposal is finalized
@@ -23,8 +23,8 @@ pub fn finalize_callback(
             msg: Some(callback_msg),
             result:
                 CallbackResult::Execute {
-                    initiator_msg,
                     result: Ok(_),
+                    ..
                 },
         } => {
             let callback_msg: InterchainGovIbcCallbackMsg = from_json(callback_msg)?;
@@ -33,9 +33,12 @@ pub fn finalize_callback(
                     proposed_to,
                     prop_hash: prop_id,
                 } => {
-                    MEMBERS_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
+                    PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
 
-                    println!("Finalized proposal {:?}, all instances updated", prop_id);
+                    if !PROPOSAL_STATE_SYNC.has_outstanding_acks(deps.storage)? {
+                        // finalize my proposal
+                        MEMBERS_STATE_SYNC.finalize_members(deps.storage, None)?;
+                    }
                 }
                 // Wrong callback message
                 _ => unimplemented!(),
@@ -47,7 +50,7 @@ pub fn finalize_callback(
         } => {
             return Err(InterchainGovError::IbcFailed(e));
         }
-        _ => panic!("unexpected callback result"),
+        _ => panic!("{:?}", ibc_msg),
     }
 
     Ok(app.response("finalize_callback"))

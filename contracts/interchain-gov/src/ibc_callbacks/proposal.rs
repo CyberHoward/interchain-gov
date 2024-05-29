@@ -1,8 +1,9 @@
-use abstract_adapter::sdk::AbstractResponse;
+use abstract_adapter::sdk::{AbstractResponse, IbcInterface};
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
 use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo};
 
 use crate::contract::{AdapterResult, InterchainGov};
+use crate::handlers::execute::finalize;
 use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
 use crate::state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::InterchainGovError;
@@ -10,8 +11,8 @@ use crate::InterchainGovError;
 /// Get a callback when a proposal is synced
 pub fn proposal_callback(
     deps: DepsMut,
-    _env: Env,
-    _info: MessageInfo,
+    env: Env,
+    info: MessageInfo,
     app: InterchainGov,
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
@@ -29,8 +30,6 @@ pub fn proposal_callback(
                     if !MEMBERS_STATE_SYNC.has_outstanding_acks(deps.storage)? {
                         // finalize my proposal
                         MEMBERS_STATE_SYNC.finalize_members(deps.storage, None)?;
-                        // send finalization to the other chain
-                        // TODO: Send confirmation to members
                     }
                 }
                 InterchainGovIbcCallbackMsg::ProposeProposal {
@@ -40,8 +39,15 @@ pub fn proposal_callback(
                 } => {
                     PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
 
-                    if PROPOSAL_STATE_SYNC.has_outstanding_acks(deps.storage)? {
-                        PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?
+                    if !PROPOSAL_STATE_SYNC.has_outstanding_acks(deps.storage)? {
+                        PROPOSAL_STATE_SYNC.finalize_kv_state(
+                            deps.storage,
+                            prop_id.clone(),
+                            None,
+                        )?;
+
+                        // TODO: re-enable after testing
+                        // return finalize(deps, env, info, app, prop_id);
                     }
                 }
                 _ => unimplemented!(),

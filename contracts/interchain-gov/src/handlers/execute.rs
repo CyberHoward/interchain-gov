@@ -131,7 +131,7 @@ fn propose(
         )?;
         match prop.action {
             // If goal is to update members, send an IBC packet to members to update their state
-            ProposalAction::UpdateMembers { mut members } => {
+            ProposalAction::UpdateMembers { members } => {
                 MEMBERS_STATE_SYNC.initiate_members(deps.storage, &env, members.clone())?;
                 // send msgs to new members
 
@@ -139,12 +139,10 @@ fn propose(
                 let exec_msg = InterchainGovIbcMsg::JoinGov {
                     members: members.clone(),
                 };
-                // Filter out self.
-                members.members.retain(|m| m != &ChainName::new(&env));
 
                 let mut msgs = vec![];
                 let target_module = this_module(&app)?;
-                for host in members.members.iter() {
+                for host in external_members.members.iter() {
                     let callback = CallbackInfo::new(
                         PROPOSE_CALLBACK_ID,
                         Some(to_json_binary(&InterchainGovIbcCallbackMsg::JoinGov {
@@ -220,8 +218,7 @@ fn propose(
 }
 
 /// Send finalization message over IBC
-/// TODO: call after all successful proposals have been cleared
-fn finalize(
+pub fn finalize(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -231,14 +228,27 @@ fn finalize(
     // State is already finalized after receiving the final proposal.
 
     let target_module = this_module(&app)?;
-    let callback = CallbackInfo::new(FINALIZE_CALLBACK_ID, None);
 
     let external_members = MEMBERS_STATE_SYNC.external_members(deps.storage, &env)?;
+
+    // set outstanding acks
+    PROPOSAL_STATE_SYNC
+        .set_outstanding_finalization_acks(deps.storage, external_members.members.clone())?;
+
+    let ibc_client = app.ibc_client(deps.as_ref());
     let finalize_messages = external_members
         .members
         .iter()
         .map(|host| {
-            let ibc_client = app.ibc_client(deps.as_ref());
+            let callback = CallbackInfo::new(
+                FINALIZE_CALLBACK_ID,
+                Some(to_json_binary(
+                    &InterchainGovIbcCallbackMsg::FinalizeProposal {
+                        prop_hash: prop_id.clone(),
+                        proposed_to: host.clone(),
+                    },
+                )?),
+            );
             let msg = ibc_client.module_ibc_action(
                 host.to_string(),
                 target_module.clone(),
@@ -259,82 +269,82 @@ fn finalize(
 }
 
 /// Do a proposal to add new members to the governance
-fn propose_gov_members(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    app: &InterchainGov,
-    updated_members: Members,
-    _proposal: ProposalMsg,
-) -> AdapterResult {
-    todo!();
-    // TODO: auth
+// fn propose_gov_members(
+//     deps: DepsMut,
+//     env: Env,
+//     info: MessageInfo,
+//     app: &InterchainGov,
+//     updated_members: Members,
+//     _proposal: ProposalMsg,
+// ) -> AdapterResult {
+//     todo!();
+//     // TODO: auth
 
-    // If the proposed change is identical to our current state, no action required.
-    let members = MEMBERS_STATE_SYNC.load_members(deps.storage)?;
-    if updated_members == members {
-        return Ok(app.response("add_members"));
-    }
+//     // If the proposed change is identical to our current state, no action required.
+//     let members = MEMBERS_STATE_SYNC.load_members(deps.storage)?;
+//     if updated_members == members {
+//         return Ok(app.response("add_members"));
+//     }
 
-    // Now propose change to others.
+//     // Now propose change to others.
 
-    // We initiate the state here.
-    let member_controller = MEMBERS_STATE_SYNC;
-    member_controller.initiate_members(deps.storage, &env, updated_members.clone())?;
+//     // We initiate the state here.
+//     let member_controller = MEMBERS_STATE_SYNC;
+//     member_controller.initiate_members(deps.storage, &env, updated_members.clone())?;
 
-    // Check member diff, see which members are added and assert they are connected.
-    let mut new_members = updated_members
-        .members
-        .iter()
-        .filter(|m| !members.members.contains(m))
-        .collect::<Vec<_>>();
+//     // Check member diff, see which members are added and assert they are connected.
+//     let mut new_members = updated_members
+//         .members
+//         .iter()
+//         .filter(|m| !members.members.contains(m))
+//         .collect::<Vec<_>>();
 
-    let ibc_host_addr = app.ibc_host(deps.as_ref())?;
-    for new_member in new_members.iter() {
-        if IBC_INFRA
-            .query(&deps.querier, ibc_host_addr.clone(), &new_member)?
-            .is_none()
-        {
-            return Err(InterchainGovError::UnknownRemoteHost {
-                host: new_member.to_string(),
-            });
-        };
-    }
+//     let ibc_host_addr = app.ibc_host(deps.as_ref())?;
+//     for new_member in new_members.iter() {
+//         if IBC_INFRA
+//             .query(&deps.querier, ibc_host_addr.clone(), &new_member)?
+//             .is_none()
+//         {
+//             return Err(InterchainGovError::UnknownRemoteHost {
+//                 host: new_member.to_string(),
+//             });
+//         };
+//     }
 
-    let ibc_client = app.ibc_client(deps.as_ref());
-    let target_module = this_module(&app)?;
+//     let ibc_client = app.ibc_client(deps.as_ref());
+//     let target_module = this_module(&app)?;
 
-    let propose_msg = ProposalMsg {
-        title: "Member Update Proposal".to_string(),
-        description: format!("New member group: {:?}", new_members),
-        // TODO: make these a config
-        min_voting_period: None,
-        expiration: cw_utils::Expiration::AtTime(env.block.time.plus_days(1)),
-        action: ProposalAction::UpdateMembers {
-            members: updated_members.clone(),
-        },
-    };
+//     let propose_msg = ProposalMsg {
+//         title: "Member Update Proposal".to_string(),
+//         description: format!("New member group: {:?}", new_members),
+//         // TODO: make these a config
+//         min_voting_period: None,
+//         expiration: cw_utils::Expiration::AtTime(env.block.time.plus_days(1)),
+//         action: ProposalAction::UpdateMembers {
+//             members: updated_members.clone(),
+//         },
+//     };
 
-    let prop_hash = propose_msg.hash();
-    let prop = Proposal::new(propose_msg, &info.sender, &env);
+//     let prop_hash = propose_msg.hash();
+//     let prop = Proposal::new(propose_msg, &info.sender, &env);
 
-    // Propose to all current members of the gov
-    let mut msgs = vec![];
-    for member in members.members.iter() {
-        msgs.push(ibc_client.module_ibc_action(
-            member.to_string(),
-            target_module.clone(),
-            &InterchainGovIbcMsg::ProposeProposal {
-                prop_hash: prop_hash.clone(),
-                prop: prop.clone(),
-                chain: member.clone(),
-            },
-            None,
-        )?);
-    }
+//     // Propose to all current members of the gov
+//     let mut msgs = vec![];
+//     for member in members.members.iter() {
+//         msgs.push(ibc_client.module_ibc_action(
+//             member.to_string(),
+//             target_module.clone(),
+//             &InterchainGovIbcMsg::ProposeProposal {
+//                 prop_hash: prop_hash.clone(),
+//                 prop: prop.clone(),
+//                 chain: member.clone(),
+//             },
+//             None,
+//         )?);
+//     }
 
-    Ok(app.response("add_members").add_messages(msgs))
-}
+//     Ok(app.response("add_members").add_messages(msgs))
+// }
 
 fn this_module(app: &InterchainGov) -> AbstractResult<ModuleInfo> {
     ModuleInfo::from_id(app.module_id(), app.version().into())

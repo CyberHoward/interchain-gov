@@ -43,6 +43,8 @@ pub fn module_ibc_handler(
                 return Err(InterchainGovError::UnauthorizedIbcMessage {});
             }
 
+            // We just finalize this whenever we receive the proposal from a group we want to join
+            // This means we don't have to handle a Finalize vote here.
             MEMBERS_STATE_SYNC.finalize_members(deps.storage, Some(members))?;
 
             Ok(app.response("module_ibc"))

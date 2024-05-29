@@ -1,12 +1,13 @@
 use crate::{
     contract::{AdapterResult, InterchainGov},
-    msg::{ConfigResponse, InterchainGovQueryMsg},
+    msg::{ConfigResponse, InterchainGovQueryMsg, MapState, ProposalStateResponse},
     state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC},
 };
 
 use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse};
 use crate::state::{ProposalId, MEMBERS};
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, Order, StdResult};
+use ibc_sync_state::DataState;
 
 pub fn query_handler(
     deps: Deps,
@@ -20,12 +21,33 @@ pub fn query_handler(
         InterchainGovQueryMsg::Proposal { prop_id } => {
             to_json_binary(&query_proposal(deps, prop_id)?)
         }
-        InterchainGovQueryMsg::ListProposals {} => to_json_binary(&query_proposals(deps)?),
+        InterchainGovQueryMsg::ListProposalStates {} => to_json_binary(&query_props_state(deps)?),
+        InterchainGovQueryMsg::Proposals { proposal_ids } => {
+            to_json_binary(&query_proposals(deps, proposal_ids)?)
+        }
+        InterchainGovQueryMsg::ListProposals {} => to_json_binary(&query_list_proposals(deps)?),
+        InterchainGovQueryMsg::ProposalState { prop_id } => {
+            to_json_binary(&query_prop_state(deps, prop_id)?)
+        }
     }
     .map_err(Into::into)
 }
 
-fn query_proposals(deps: Deps) -> AdapterResult<ProposalsResponse> {
+fn query_proposals(deps: Deps, proposal_ids: Vec<String>) -> AdapterResult<ProposalsResponse> {
+    let mut proposals = vec![];
+    for proposal_id in proposal_ids {
+        let (prop, vote) = PROPOSAL_STATE_SYNC.load(deps.storage, proposal_id.clone())?;
+        let data_state = PROPOSAL_STATE_SYNC.data_state(deps.storage, proposal_id.clone());
+        proposals.push(ProposalResponse {
+            prop_id: proposal_id,
+            prop: prop,
+            state: data_state,
+        })
+    }
+    Ok(ProposalsResponse { proposals })
+}
+
+fn query_list_proposals(deps: Deps) -> AdapterResult<ProposalsResponse> {
     let proposals = PROPOSAL_STATE_SYNC
         .map()
         .range(deps.storage, None, None, Order::Ascending)
@@ -33,16 +55,72 @@ fn query_proposals(deps: Deps) -> AdapterResult<ProposalsResponse> {
 
     let proposals = proposals
         .into_iter()
-        .map(|(prop_id, (prop, state))| crate::msg::ProposalResponse { prop_id, prop })
+        .map(|(prop_id, (prop, vote))| {
+            let data_state = PROPOSAL_STATE_SYNC.data_state(deps.storage, prop_id.clone());
+            crate::msg::ProposalResponse {
+                prop_id,
+                prop,
+                state: data_state,
+            }
+        })
         .collect();
 
     Ok(ProposalsResponse { proposals })
 }
 
-fn query_proposal(deps: Deps, prop_id: ProposalId) -> AdapterResult<ProposalResponse> {
-    let (prop, state) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?;
+fn query_props_state(deps: Deps) -> AdapterResult<ProposalStateResponse> {
+    let states = PROPOSAL_STATE_SYNC
+        .state_status_map()
+        .range(deps.storage, None, None, Order::Ascending)
+        .collect::<StdResult<Vec<_>>>()?;
 
-    Ok(ProposalResponse { prop_id, prop })
+    let states = states
+        .into_iter()
+        .map(|((nk, k, i), change)| MapState {
+            namespace: nk,
+            proposal_id: k,
+            state: DataState::from_num(i).unwrap(),
+            change,
+        })
+        .collect();
+    println!("Ahhh {:?}", states);
+    Ok(ProposalStateResponse { state: states })
+}
+
+fn query_prop_state(deps: Deps, prop_id: ProposalId) -> AdapterResult<Option<MapState>> {
+    let mut states = PROPOSAL_STATE_SYNC
+        .state_status_map()
+        .range(deps.storage, None, None, Order::Ascending)
+        .collect::<StdResult<Vec<_>>>()?;
+
+    states.retain(|((_, a, _), _)| a == &prop_id);
+
+    let states: Vec<MapState> = states
+        .into_iter()
+        .map(|((nk, k, i), change)| MapState {
+            namespace: nk,
+            proposal_id: k,
+            state: DataState::from_num(i).unwrap(),
+            change,
+        })
+        .collect();
+
+    if states.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(states[0].clone()))
+    }
+}
+
+fn query_proposal(deps: Deps, prop_id: ProposalId) -> AdapterResult<ProposalResponse> {
+    let (prop, _) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?;
+    let data_state = PROPOSAL_STATE_SYNC.data_state(deps.storage, prop_id.clone());
+
+    Ok(ProposalResponse {
+        prop_id,
+        prop,
+        state: data_state,
+    })
 }
 
 fn query_members(deps: Deps) -> AdapterResult<MembersResponse> {

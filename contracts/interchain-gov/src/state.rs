@@ -3,7 +3,7 @@ use std::fmt::Display;
 use abstract_adapter::objects::chain_name::ChainName;
 use base64::Engine;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Decimal, Env};
+use cosmwasm_std::{Addr, Binary, CosmosMsg, Decimal, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
 use dao_voting::threshold::{PercentageThreshold, Threshold};
@@ -189,6 +189,12 @@ impl Members {
         Members {
             members: vec![ChainName::new(env)],
         }
+    }
+}
+
+impl From<Vec<ChainName>> for Members {
+    fn from(members: Vec<ChainName>) -> Self {
+        Members { members }
     }
 }
 

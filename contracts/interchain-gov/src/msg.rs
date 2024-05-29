@@ -5,7 +5,7 @@ use crate::{
 
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::QueryResponses;
-use ibc_sync_state::DataState;
+use ibc_sync_state::{DataState, StateChange};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_adapter::adapter_msg_types!(
@@ -34,7 +34,7 @@ pub enum InterchainGovExecuteMsg {
     Finalize {
         prop_id: ProposalId,
     },
-    /// Finalize the proposal state
+    /// Execute the proposal state
     #[fn_name("execute_proposal")]
     Execute {
         prop_id: ProposalId,
@@ -44,7 +44,7 @@ pub enum InterchainGovExecuteMsg {
         prop_hash: String,
         vote: bool,
     },
-    AcceptGovInvite {
+    SetAcceptGovInvite {
         /// only accept invites for groups with these members
         members: Members,
     },
@@ -105,9 +105,15 @@ pub enum InterchainGovQueryMsg {
     // #[returns(PendingProposalStates)]
     // PendingProposals {},
     #[returns(ProposalsResponse)]
+    Proposals { proposal_ids: Vec<ProposalId> },
+    #[returns(ProposalsResponse)]
     ListProposals {},
+    #[returns(ProposalStateResponse)]
+    ListProposalStates {},
     #[returns(ProposalResponse)]
     Proposal { prop_id: ProposalId },
+    #[returns(Option<MapState>)]
+    ProposalState { prop_id: ProposalId },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -127,4 +133,18 @@ pub struct ProposalsResponse {
 pub struct ProposalResponse {
     pub prop_id: ProposalId,
     pub prop: Proposal,
+    pub state: Option<DataState>,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct ProposalStateResponse {
+    pub state: Vec<MapState>,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct MapState {
+    pub namespace: String,
+    pub proposal_id: String,
+    pub state: DataState,
+    pub change: StateChange,
 }

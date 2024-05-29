@@ -32,6 +32,10 @@ where
         &self.map
     }
 
+    pub const fn state_status_map(&self) -> &Map<(StorageKey, Key, u8), StateChange> {
+        &self.state_status_map
+    }
+
     fn storage_key(&self) -> StorageKey {
         std::str::from_utf8(self.map.namespace())
             .unwrap()
@@ -46,6 +50,31 @@ where
         self.state_status_map
             .load(storage, (self.storage_key(), key.0.into(), key.1.to_num()))
             .map_err(Into::into)
+    }
+
+    pub fn data_state(&self, storage: &dyn Storage, key: impl Into<Key>) -> Option<DataState> {
+        let key = key.into();
+        if self.state_status_map.has(
+            storage,
+            (
+                self.storage_key(),
+                key.clone(),
+                DataState::Initiated.to_num(),
+            ),
+        ) {
+            return Some(DataState::Initiated);
+        } else if self.state_status_map.has(
+            storage,
+            (
+                self.storage_key(),
+                key.clone(),
+                DataState::Proposed.to_num(),
+            ),
+        ) {
+            return Some(DataState::Proposed);
+        }
+
+        None
     }
 
     pub fn load(&self, storage: &dyn Storage, key: K) -> SyncStateResult<V> {
@@ -91,7 +120,7 @@ where
     ) -> SyncStateResult<StateChange> {
         let key = key.into();
         let state_change = self
-            .load_status(storage, (key.clone(), DataState::Initiate))
+            .load_status(storage, (key.clone(), DataState::Initiated))
             .or_else(|_| self.load_status(storage, (key.clone(), DataState::Proposed)))
             .ok();
         state_change.ok_or(SyncStateError::NoProposedState)
@@ -108,7 +137,7 @@ where
             (
                 self.storage_key(),
                 key.clone(),
-                DataState::Initiate.to_num(),
+                DataState::Initiated.to_num(),
             ),
         ) || self.state_status_map.has(
             storage,
@@ -172,12 +201,26 @@ where
 
         self.state_status_map.save(
             storage,
-            (self.storage_key(), key.into(), DataState::Initiate.to_num()),
+            (
+                self.storage_key(),
+                key.into(),
+                DataState::Initiated.to_num(),
+            ),
             &StateChange::Proposal(to_json_binary(&initiated_value)?),
         )?;
         self.outstanding_acks.save(storage, &outstanding_acks)?;
         Ok(())
     }
+
+    pub fn set_outstanding_finalization_acks(
+        &self,
+        storage: &mut dyn Storage,
+        acks: Vec<ChainName>,
+    ) -> SyncStateResult<()> {
+        self.outstanding_acks.save(storage, &acks)?;
+        Ok(())
+    }
+
     // Remove init / proposed states
     // Errors if no proposed state is found or provided
     pub fn finalize_kv_state(
@@ -206,11 +249,11 @@ where
         // Remove any of the states
         if self.state_status_map.has(
             storage,
-            (self.storage_key(), k.clone(), DataState::Initiate.to_num()),
+            (self.storage_key(), k.clone(), DataState::Initiated.to_num()),
         ) {
             self.state_status_map.remove(
                 storage,
-                (self.storage_key(), k.clone(), DataState::Initiate.to_num()),
+                (self.storage_key(), k.clone(), DataState::Initiated.to_num()),
             );
         } else if self.state_status_map.has(
             storage,
