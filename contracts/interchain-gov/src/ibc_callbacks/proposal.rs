@@ -16,6 +16,9 @@ pub fn proposal_callback(
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
 
+    println!("proposal_callback");
+
+
     match ibc_msg.result {
         CallbackResult::Execute { initiator_msg, result } => {
             let initiator_msg: InterchainGovIbcMsg = from_json(initiator_msg)?;
@@ -54,6 +57,8 @@ pub fn proposal_callback(
                                 None => Err(InterchainGovError::ProposalNotFound(prop_id.clone()))
                             }
                         })?;
+                    } else {
+                        println!("Still pending states: {:?}", prop_states);
                     }
                 }
                 // Wrong initiator message

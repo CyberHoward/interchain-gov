@@ -17,7 +17,7 @@ use crate::{
 use crate::handlers::instantiate::{get_item_state, propose_item_state};
 use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID};
 use crate::msg::{InterchainGovIbcMsg};
-use crate::state::{DataState, LOCAL_VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote};
+use crate::state::{DataState, LOCAL_VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members};
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -30,8 +30,18 @@ pub fn execute_handler(
         InterchainGovExecuteMsg::Propose { proposal } => propose(deps, env, info, adapter, proposal),
         InterchainGovExecuteMsg::Finalize { prop_id } => finalize(deps, env, info, adapter, prop_id),
         InterchainGovExecuteMsg::InviteMember { member } => invite_member(deps, adapter, member),
+        InterchainGovExecuteMsg::TestAddMembers { members } => test_add_members(deps, adapter, members),
         _ => todo!()
     }
+}
+
+fn test_add_members(deps: DepsMut, app: InterchainGov, members: Vec<ChainName>) -> AdapterResult {
+    MEMBERS.update(deps.storage, |mut m| -> StdResult<Members> {
+        m.members.extend(members);
+        Ok(m)
+    })?;
+
+    Ok(app.response("update_members"))
 }
 
 /// Propose a new message to the interchain DAO
@@ -56,6 +66,13 @@ fn propose(
         return Err(InterchainGovError::ProposalAlreadyExists(prop_id));
     }
 
+    let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
+    if external_members.is_empty() {
+        // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
+        PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Finalized))?;
+        return Ok(app.response("propose").add_attribute("prop_id", prop_id))
+    };
+
     // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
     PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Initiated))?;
 
@@ -66,10 +83,8 @@ fn propose(
     let target_module = this_module(&app)?;
     let callback = CallbackInfo::new(PROPOSE_CALLBACK_ID, None);
     // Loop through members and propose to them the proposal (TODO: do we actually need ourselves stored)?
-    let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
 
     let propose_msgs = external_members.iter().map(|host| {
-
         let ibc_client = app.ibc_client(deps.as_ref());
         let msg = ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::ProposeProposal {
             prop: prop.clone(),
@@ -110,16 +125,20 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
         });
     }
 
-    let ibc_client = app.ibc_client(deps.as_ref());
     let target_module = this_module(&app)?;
     let callback = CallbackInfo::new(FINALIZE_CALLBACK_ID, None);
 
     let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
     let finalize_messages = external_members.iter().map(|host| {
-        ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::FinalizeProposal {
+        let ibc_client = app.ibc_client(deps.as_ref());
+        let msg = ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::FinalizeProposal {
             prop_hash: prop_id.clone(),
             chain: host.clone(),
-        }, Some(callback.clone()))
+        }, Some(callback.clone()))?;
+
+        REMOTE_PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host), &DataState::Proposed)?;
+
+        Ok(msg)
     }).collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
 
 
@@ -182,20 +201,3 @@ fn this_module(app: &InterchainGov) -> AbstractResult<ModuleInfo> {
 }
 
 
-
-// /// Execute a proposal that we have
-// fn execute_proposal(
-//     deps: DepsMut,
-//     info: MessageInfo,
-//     app: InterchainGov,
-//     prop: ProposalMsg,
-//     env: Env,
-// ) -> AdapterResult {
-//     let msgs = match prop.action {
-//         ProposalAction::InviteMember {
-//             member
-//         } => invite_member(deps, app, member)
-//     };
-//
-//     Ok(app.response("execute_proposal"))
-// }

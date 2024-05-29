@@ -25,6 +25,11 @@ pub enum InterchainGovExecuteMsg {
     Finalize {
         prop_id: ProposalId,
     },
+    /// Finalize the proposal state
+    #[fn_name("execute_proposal")]
+    Execute {
+        prop_id: ProposalId,
+    },
     ///Called by gov to vote on a proposal
     VoteProposal {
         prop_hash: String,
@@ -37,6 +42,10 @@ pub enum InterchainGovExecuteMsg {
     // TODO: remove, just propose state change
     InviteMember {
         member: ChainName
+    },
+    /// Temporaryy override
+    TestAddMembers {
+        members: Vec<ChainName>
     }
 }
 
@@ -82,7 +91,15 @@ pub enum InterchainGovQueryMsg {
     #[returns(ConfigResponse)]
     Config {},
     #[returns(MembersResponse)]
-    Members {}
+    Members {},
+    // #[returns(PendingProposalStates)]
+    // PendingProposals {},
+    #[returns(ProposalsResponse)]
+    ListProposals {},
+    #[returns(ProposalResponse)]
+    Proposal {
+        prop_id: ProposalId,
+    }
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -91,5 +108,17 @@ pub struct ConfigResponse {}
 #[cosmwasm_schema::cw_serde]
 pub struct MembersResponse {
     pub members: Vec<ChainName>,
+    pub state: DataState,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct ProposalsResponse {
+    pub proposals: Vec<ProposalResponse>
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct ProposalResponse {
+    pub prop_id: ProposalId,
+    pub prop: Proposal,
     pub state: DataState,
 }

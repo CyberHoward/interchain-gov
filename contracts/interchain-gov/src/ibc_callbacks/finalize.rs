@@ -17,6 +17,8 @@ pub fn finalize_callback(
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
 
+    println!("finalize_callback");
+
     match ibc_msg.result {
         CallbackResult::Execute { initiator_msg, result } => {
             let initiator_msg: InterchainGovIbcMsg = from_json(initiator_msg)?;
@@ -26,13 +28,16 @@ pub fn finalize_callback(
                     chain,
                     ..
                 } => {
+                    println!("Finalizing proposal: {:?}", prop_id);
                     if ibc_msg.msg.is_some() {
+                        println!("Unknown callback message");
                         return Err(InterchainGovError::UnknownCallbackMessage(ibc_msg.id))
                     }
 
                     // Ensure that it was proposed
                     let prev_state = REMOTE_PROPOSAL_STATE.may_load(deps.storage, (prop_id.clone(), &chain))?;
                     if prev_state.clone().map_or(true, |state| !state.is_proposed()) {
+                        println!("Invalid proposal state: {:?}", prev_state.clone());
                         return Err(InterchainGovError::InvalidProposalState {
                             prop_id: prop_id.clone(),
                             chain: chain.clone(),
@@ -48,6 +53,7 @@ pub fn finalize_callback(
                     let prop_states = REMOTE_PROPOSAL_STATE.prefix(prop_id.clone()).keys(deps.storage, None, None, Order::Ascending).take(1).collect::<StdResult<Vec<_>>>()?;
                     if prop_states.is_empty() {
                         PROPOSALS.update(deps.storage, prop_id.clone(), |prop| -> Result<(Proposal, DataState), InterchainGovError> {
+                            println!("Updating proposal state to finalized");
                             match prop {
                                 Some((prop, _)) => {
                                     Ok((prop, DataState::Finalized))
@@ -55,6 +61,8 @@ pub fn finalize_callback(
                                 None => Err(InterchainGovError::ProposalNotFound(prop_id.clone()))
                             }
                         })?;
+                    } else {
+                        println!("Still pending states: {:?}", prop_states);
                     }
                 }
                 // Wrong initiator message
@@ -66,6 +74,7 @@ pub fn finalize_callback(
             unreachable!()
         },
         CallbackResult::FatalError(_) => {
+            println!("Fatal error");
             return Err(InterchainGovError::IbcFailed(ibc_msg));
         }
     }

@@ -77,7 +77,7 @@ pub struct ProposalMsg {
     /// additional votes.
     pub expiration: Expiration,
     /// A standard action that the group can run
-    pub action: ProposalAction
+    pub actions: Vec<ProposalAction>
 }
 
 // https://github.com/DA0-DA0/dao-contracts/blob/development/contracts/proposal/dao-proposal-single/src/proposal.rs
@@ -93,7 +93,7 @@ pub struct Proposal {
     /// The chain that created this proposal
     pub proposer_chain: ChainName,
     /// Action that the group will perform
-    pub action: ProposalAction,
+    pub actions: Vec<ProposalAction>,
     /// The minimum amount of time this proposal must remain open for
     /// voting. The proposal may not pass unless this is expired or
     /// None.
@@ -115,13 +115,13 @@ impl Proposal {
             description,
             min_voting_period,
             expiration,
-            action
+            actions
         } = proposal;
 
         Proposal {
             title,
             description,
-            action,
+            actions,
             min_voting_period,
             expiration,
             proposer: proposer.to_string(),

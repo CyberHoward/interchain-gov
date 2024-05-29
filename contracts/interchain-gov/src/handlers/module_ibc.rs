@@ -85,7 +85,7 @@ pub fn module_ibc_handler(
                                 chain: our_chain.clone()
                             });
                         }
-                        Ok((_prop, DataState::Proposed))
+                        Ok((_prop, DataState::Finalized))
                     }
                 }
             })?;
