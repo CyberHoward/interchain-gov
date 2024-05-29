@@ -12,4 +12,7 @@ pub enum SyncStateError {
 
     #[error("No proposed state for state transition")]
     NoProposedState,
+
+    #[error("Data {key} not proposed. Status: {state}")]
+    DataNotProposed { key: String, state: String },
 }

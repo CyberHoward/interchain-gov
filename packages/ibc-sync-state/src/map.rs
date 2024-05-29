@@ -1,14 +1,18 @@
-use cosmwasm_std::{from_json, to_json_binary, Storage};
-use cw_storage_plus::{Map, PrimaryKey};
+use abstract_adapter::objects::chain_name::ChainName;
+use cosmwasm_std::{from_json, to_json_binary, StdResult, Storage};
+use cw_storage_plus::{Item, Map, PrimaryKey};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{DataState, Key, StateChange, StorageKey, SyncStateError, SyncStateResult};
 
 pub const MAPS_DATA_STATE: Map<(StorageKey, Key, u8), StateChange> = Map::new("map_data");
+pub const OUTSTANDING_ACKS: Item<Vec<ChainName>> = Item::new("map_acks");
 
 pub struct MapStateSyncController<'a, K, V> {
     state_status_map: Map<'static, (StorageKey, Key, u8), StateChange>,
     map: Map<'a, K, V>,
+    outstanding_acks: Item<'static, Vec<ChainName>>,
+    // introduce outstanding acks
 }
 
 impl<'a, K, V> MapStateSyncController<'a, K, V>
@@ -20,7 +24,12 @@ where
         MapStateSyncController {
             state_status_map: MAPS_DATA_STATE,
             map,
+            outstanding_acks: OUTSTANDING_ACKS,
         }
+    }
+
+    pub const fn map(&self) -> &Map<'a, K, V> {
+        &self.map
     }
 
     fn storage_key(&self) -> StorageKey {
@@ -45,6 +54,28 @@ where
 
     pub fn may_load(&self, storage: &dyn Storage, key: K) -> SyncStateResult<Option<V>> {
         self.map.may_load(storage, key).map_err(Into::into)
+    }
+
+    pub fn apply_ack(
+        &self,
+        storage: &mut dyn Storage,
+        chain: ChainName,
+    ) -> SyncStateResult<Option<ChainName>> {
+        let mut acks = self.outstanding_acks.load(storage)?;
+        // find chain in acks and remove it
+        let receipt_i = acks.iter().position(|c| c == &chain);
+        let ack_chain = match receipt_i {
+            Some(receipt_i) => acks.remove(receipt_i),
+            None => return Ok(None),
+        };
+
+        self.outstanding_acks.save(storage, &acks)?;
+        Ok(Some(ack_chain))
+    }
+
+    pub fn has_outstanding_acks(&self, storage: &dyn Storage) -> StdResult<bool> {
+        let acks = self.outstanding_acks.load(storage)?;
+        Ok(!acks.is_empty())
     }
 
     pub fn has(&self, storage: &dyn Storage, key: K) -> bool {
@@ -95,6 +126,24 @@ where
         Ok(())
     }
 
+    fn assert_proposed(&self, storage: &dyn Storage, key: impl Into<Key>) -> SyncStateResult<()> {
+        let key = key.into();
+        if !self.state_status_map.has(
+            storage,
+            (
+                self.storage_key(),
+                key.clone(),
+                DataState::Proposed.to_num(),
+            ),
+        ) {
+            return Err(SyncStateError::DataNotProposed {
+                key,
+                state: "Unknown".to_string(),
+            });
+        }
+        Ok(())
+    }
+
     pub fn propose_kv_state(
         &self,
         storage: &mut dyn Storage,
@@ -115,18 +164,19 @@ where
         storage: &mut dyn Storage,
         key: impl Into<Key>,
         initiated_value: V,
+        outstanding_acks: Vec<ChainName>,
     ) -> SyncStateResult<()> {
         let key = key.into();
 
         self.assert_finalized(storage, key.clone())?;
 
-        self.state_status_map
-            .save(
-                storage,
-                (self.storage_key(), key.into(), DataState::Initiate.to_num()),
-                &StateChange::Proposal(to_json_binary(&initiated_value)?),
-            )
-            .map_err(Into::into)
+        self.state_status_map.save(
+            storage,
+            (self.storage_key(), key.into(), DataState::Initiate.to_num()),
+            &StateChange::Proposal(to_json_binary(&initiated_value)?),
+        )?;
+        self.outstanding_acks.save(storage, &outstanding_acks)?;
+        Ok(())
     }
     // Remove init / proposed states
     // Errors if no proposed state is found or provided

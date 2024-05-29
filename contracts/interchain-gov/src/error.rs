@@ -76,11 +76,14 @@ pub enum InterchainGovError {
         prop_id: ProposalId,
         expected: Option<DataState>,
         actual: Option<DataState>,
-        chain: ChainName
+        chain: ChainName,
     },
 
     #[error("Invalid chain. Expected: {expected:?}, Actual: {actual:?}")]
-    WrongChain { expected: ChainName, actual: ChainName },
+    WrongChain {
+        expected: ChainName,
+        actual: ChainName,
+    },
 
     #[error("Proposal {0} expired")]
     ProposalExpired(String),

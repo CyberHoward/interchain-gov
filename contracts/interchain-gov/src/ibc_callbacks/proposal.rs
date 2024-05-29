@@ -19,37 +19,11 @@ pub fn proposal_callback(
         IbcResponseMsg {
             id: _,
             msg: Some(callback_msg),
-            result:
-                CallbackResult::Execute {
-                    initiator_msg,
-                    result: Ok(_),
-                },
+            result: CallbackResult::Execute { result: Ok(_), .. },
         } => {
-            // TODO: move this impl to callback impl
-            let initiator_msg: InterchainGovIbcMsg = from_json(initiator_msg)?;
-            match initiator_msg {
-                // This is called when you proposed a proposal and are receiving callbacks
-                InterchainGovIbcMsg::ProposeProposal {
-                    prop_hash: prop_id,
-                    chain,
-                    ..
-                } => {
-                    if PROPOSAL_STATE_SYNC.has(deps.storage, prop_id.clone()) {
-                        // TODO: check prev state
-                        return Err(InterchainGovError::PreExistingProposalState {
-                            prop_id: prop_id.clone(),
-                            chain: chain.clone(),
-                            state: "already exists".to_string(),
-                        });
-                    }
-
-                    PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?
-                }
-                _ => (),
-            };
             let callback_msg: InterchainGovIbcCallbackMsg = from_json(callback_msg)?;
             match callback_msg {
-                InterchainGovIbcCallbackMsg::JoinGovProposal { proposed_to } => {
+                InterchainGovIbcCallbackMsg::JoinGov { proposed_to } => {
                     MEMBERS_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
 
                     if !MEMBERS_STATE_SYNC.has_outstanding_acks(deps.storage)? {
@@ -59,6 +33,18 @@ pub fn proposal_callback(
                         // TODO: Send confirmation to members
                     }
                 }
+                InterchainGovIbcCallbackMsg::ProposeProposal {
+                    prop_hash: prop_id,
+                    proposed_to,
+                    ..
+                } => {
+                    PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
+
+                    if PROPOSAL_STATE_SYNC.has_outstanding_acks(deps.storage)? {
+                        PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?
+                    }
+                }
+                _ => unimplemented!(),
             }
         }
         IbcResponseMsg {

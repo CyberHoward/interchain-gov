@@ -1,4 +1,7 @@
-use crate::{contract::InterchainGov, state::Members};
+use crate::{
+    contract::InterchainGov,
+    state::{Members, ProposalId},
+};
 
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::QueryResponses;
@@ -37,13 +40,19 @@ pub enum InterchainGovExecuteMsg {
         prop_id: ProposalId,
     },
     ///Called by gov to vote on a proposal
-    VoteProposal { prop_hash: String, vote: bool },
+    VoteProposal {
+        prop_hash: String,
+        vote: bool,
+    },
     AcceptGovInvite {
         /// only accept invites for groups with these members
         members: Members,
     },
     TallyProposal {
         prop_id: String,
+    },
+    TestAddMembers {
+        members: Members,
     },
 }
 
@@ -71,9 +80,17 @@ pub enum InterchainGovIbcMsg {
 #[non_exhaustive]
 #[cosmwasm_schema::cw_serde]
 pub enum InterchainGovIbcCallbackMsg {
-    JoinGov { proposed_to: ChainName },
-    FinalizeProposal { prop_hash: String, proposed_to: ChainName },
-    ProposeProposal { prop_hash: String, proposed_to: ChainName },
+    JoinGov {
+        proposed_to: ChainName,
+    },
+    FinalizeProposal {
+        prop_hash: String,
+        proposed_to: ChainName,
+    },
+    ProposeProposal {
+        prop_hash: String,
+        proposed_to: ChainName,
+    },
 }
 
 /// App query messages
@@ -90,9 +107,7 @@ pub enum InterchainGovQueryMsg {
     #[returns(ProposalsResponse)]
     ListProposals {},
     #[returns(ProposalResponse)]
-    Proposal {
-        prop_id: ProposalId,
-    }
+    Proposal { prop_id: ProposalId },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -101,17 +116,15 @@ pub struct ConfigResponse {}
 #[cosmwasm_schema::cw_serde]
 pub struct MembersResponse {
     pub members: Members,
-    pub state: Option<DataState>,
 }
 
 #[cosmwasm_schema::cw_serde]
 pub struct ProposalsResponse {
-    pub proposals: Vec<ProposalResponse>
+    pub proposals: Vec<ProposalResponse>,
 }
 
 #[cosmwasm_schema::cw_serde]
 pub struct ProposalResponse {
     pub prop_id: ProposalId,
     pub prop: Proposal,
-    pub state: DataState,
 }

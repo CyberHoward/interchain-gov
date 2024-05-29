@@ -12,7 +12,6 @@ pub use map::MapStateSyncController;
 
 pub type SyncStateResult<T> = Result<T, SyncStateError>;
 
-pub type ProposalId = String;
 pub type StorageKey = String;
 pub type Key = String;
 

@@ -1,8 +1,12 @@
 use abstract_adapter::objects::chain_name::ChainName;
-use interchain_gov::{contract::interface::InterchainGovInterface, msg::{ConfigResponse, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns}, InterchainGovExecuteMsg, MY_NAMESPACE, MY_ADAPTER_ID};
+use interchain_gov::{
+    contract::interface::InterchainGovInterface,
+    msg::{ConfigResponse, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
+    InterchainGovExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
+};
 
-use abstract_adapter::std::{adapter, adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_adapter::std::manager::ExecuteMsgFns;
+use abstract_adapter::std::{adapter, adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_adapter::std::{adapter::AdapterRequestMsg, objects::namespace::Namespace};
 use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
 use abstract_cw_orch_polytone::Polytone;
@@ -13,7 +17,7 @@ use cw_orch::{anyhow, prelude::*};
 use speculoos::prelude::*;
 
 use abstract_interchain_tests::setup::ibc_connect_polytone_and_abstract;
-use cw_orch::mock::cw_multi_test::{AppResponse};
+use cw_orch::mock::cw_multi_test::AppResponse;
 use interchain_gov::state::{DataState, ProposalAction, ProposalId, ProposalMsg};
 // use cw_orch_interchain::MockBech32InterchainEnv;
 
@@ -62,15 +66,16 @@ impl<Env: CwEnv> TestEnv<Env> {
             .install_adapter::<InterchainGovInterface<_>>(&[])?;
 
         // Make it so we can execute on the adapter directly
-        publisher.account().as_ref().manager.execute_on_module(MY_ADAPTER_ID, adapter::ExecuteMsg::<Empty>::Base(
-            adapter::BaseExecuteMsg {
+        publisher.account().as_ref().manager.execute_on_module(
+            MY_ADAPTER_ID,
+            adapter::ExecuteMsg::<Empty>::Base(adapter::BaseExecuteMsg {
                 proxy_address: None,
                 msg: adapter::AdapterBaseMsg::UpdateAuthorizedAddresses {
                     to_add: vec![sender.to_string()],
                     to_remove: vec![],
                 },
-            },
-        ))?;
+            }),
+        )?;
 
         Ok(TestEnv {
             abs: abs_client,
@@ -94,7 +99,6 @@ impl<Env: CwEnv> TestEnv<Env> {
     }
 
     // helpers
-
 }
 
 impl<Chain: CwEnv> Environment<Chain> for TestEnv<Chain> {
@@ -104,38 +108,56 @@ impl<Chain: CwEnv> Environment<Chain> for TestEnv<Chain> {
 }
 
 impl TestEnv<MockBech32> {
-    pub fn execute_gov_for(&self, request: InterchainGovExecuteMsg, for_acc: Option<&Account<MockBech32>>) -> anyhow::Result<AppResponse> {
+    pub fn execute_gov_for(
+        &self,
+        request: InterchainGovExecuteMsg,
+        for_acc: Option<&Account<MockBech32>>,
+    ) -> anyhow::Result<AppResponse> {
         let acc = for_acc.unwrap_or(self.gov.account());
-        Ok(self.gov.call_as(&acc.manager()?).execute(&AdapterRequestMsg {
-            proxy_address: Some(acc.proxy()?.to_string()),
-            request,
-        }.into(), None)?)
+        Ok(self.gov.call_as(&acc.manager()?).execute(
+            &AdapterRequestMsg {
+                proxy_address: Some(acc.proxy()?.to_string()),
+                request,
+            }
+            .into(),
+            None,
+        )?)
     }
 
     pub fn execute_gov(&self, request: InterchainGovExecuteMsg) -> anyhow::Result<AppResponse> {
-       self.execute_gov_for(request, None)
+        self.execute_gov_for(request, None)
     }
 
-    fn propose_proposal(&self, title: &str, actions: Vec<ProposalAction>) -> anyhow::Result<(AppResponse, ProposalId)> {
+    fn propose_proposal(
+        &self,
+        title: &str,
+        actions: Vec<ProposalAction>,
+    ) -> anyhow::Result<(AppResponse, ProposalId)> {
         let res = self.execute_gov(InterchainGovExecuteMsg::Propose {
-            proposal: test_proposal(title, actions)
+            proposal: test_proposal(title, actions),
         })?;
 
         let props = self.gov.list_proposals()?.proposals;
-        let prop_id = props.into_iter().find(|p| p.prop.title == title).unwrap().prop_id;
+        let prop_id = props
+            .into_iter()
+            .find(|p| p.prop.title == title)
+            .unwrap()
+            .prop_id;
 
         Ok((res, prop_id))
     }
 
     fn finalize_proposal(&self, prop_id: ProposalId) -> anyhow::Result<AppResponse> {
-        let res = self.execute_gov(InterchainGovExecuteMsg::Finalize {
-            prop_id
-        })?;
+        let res = self.execute_gov(InterchainGovExecuteMsg::Finalize { prop_id })?;
 
         Ok(res)
     }
 
-    fn assert_prop_state(&self, prop_id: ProposalId, expected_state: DataState) -> anyhow::Result<()> {
+    fn assert_prop_state(
+        &self,
+        prop_id: ProposalId,
+        expected_state: DataState,
+    ) -> anyhow::Result<()> {
         let state = self.gov.proposal(prop_id)?.state;
         assert_that!(state).is_equal_to(expected_state);
         Ok(())
@@ -148,7 +170,7 @@ fn test_proposal(title: impl Into<String>, actions: Vec<ProposalAction>) -> Prop
         description: "This is a test proposal".to_string(),
         min_voting_period: None,
         expiration: Default::default(),
-        actions
+        actions,
     }
 }
 
@@ -171,19 +193,15 @@ fn successful_install() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 mod propose {
-    
+
     use super::*;
 
     #[test]
     fn happy_propose() -> anyhow::Result<()> {
         let interchain = MockBech32InterchainEnv::new(vec![
             (A_CHAIN_ID, A_CHAIN_ADDR),
-            (
-                B_CHAIN_ID,
-                B_CHAIN_ADDR
-            ),
+            (B_CHAIN_ID, B_CHAIN_ADDR),
         ]);
 
         let a_env = TestEnv::setup(interchain.chain(A_CHAIN_ID)?)?;
@@ -221,19 +239,15 @@ mod propose {
     }
 }
 
-
 mod finalize {
-    
+
     use super::*;
 
     #[test]
     fn happy_finalize() -> anyhow::Result<()> {
         let interchain = MockBech32InterchainEnv::new(vec![
             (A_CHAIN_ID, A_CHAIN_ADDR),
-            (
-                B_CHAIN_ID,
-                B_CHAIN_ADDR
-            ),
+            (B_CHAIN_ID, B_CHAIN_ADDR),
         ]);
 
         let a_env = TestEnv::setup(interchain.chain(A_CHAIN_ID)?)?;
@@ -268,11 +282,9 @@ mod finalize {
         a_env.assert_prop_state(prop_id.clone(), DataState::Finalized)?;
         b_env.assert_prop_state(prop_id, DataState::Finalized)?;
 
-
         Ok(())
     }
 }
-
 
 // #[test]
 // fn update_members() -> anyhow::Result<()> {

@@ -25,10 +25,10 @@ pub type Key = String;
 
 // pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
 
-pub(self) const MEMBERS_KEY: &'static str = "members";
+pub const MEMBERS_KEY: &'static str = "members";
 pub const MEMBERS: Item<Members> = Item::new(MEMBERS_KEY);
 pub const MEMBERS_STATE_SYNC: MembersSyncState = MembersSyncState::new();
-
+pub const OUTSTANDING_ACKS: Item<Vec<ChainName>> = Item::new("acks");
 pub const ALLOW_JOINING_GOV: Item<Members> = Item::new("alw");
 
 const PROPOSALS: Map<ProposalId, (Proposal, Vote)> = Map::new("props");
@@ -40,9 +40,11 @@ pub const PROPOSAL_STATE_SYNC: MapStateSyncController<'_, ProposalId, (Proposal,
 
 pub mod members_sync_state {
     use abstract_adapter::objects::chain_name::ChainName;
-    use cosmwasm_std::{from_json, to_json_binary, StdResult, Storage};
+    use cosmwasm_std::{from_json, to_json_binary, Env, StdResult, Storage};
     use cw_storage_plus::Item;
-    use ibc_sync_state::{DataState, ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
+    use ibc_sync_state::{
+        DataState, ItemStateSyncController, StateChange, SyncStateError, SyncStateResult,
+    };
 
     use super::{Members, MEMBERS_KEY};
 
@@ -57,7 +59,7 @@ pub mod members_sync_state {
             MembersSyncState {
                 item_state_controller: ItemStateSyncController::new(),
                 members: super::MEMBERS,
-                outstanding_acks: Item::new("outstanding_receipts"),
+                outstanding_acks: super::OUTSTANDING_ACKS,
             }
         }
 
@@ -65,9 +67,13 @@ pub mod members_sync_state {
             self.members.load(storage)
         }
 
-        pub fn external_members(&self,storage: &dyn Storage, env: &Env) -> SyncStateResult<Members> {
+        pub fn external_members(
+            &self,
+            storage: &dyn Storage,
+            env: &Env,
+        ) -> SyncStateResult<Members> {
             let mut members = self.load_members(storage)?;
-            members.members.retain(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
+            members.members.retain(|m| m != &ChainName::new(&env));
             Ok(members)
         }
 
@@ -190,9 +196,7 @@ impl Members {
 #[cw_serde]
 pub enum ProposalAction {
     Signal,
-    UpdateMembers {
-        members: Members,
-    },
+    UpdateMembers { members: Members },
 }
 
 #[cw_serde]
