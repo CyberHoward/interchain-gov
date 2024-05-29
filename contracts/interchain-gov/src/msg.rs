@@ -120,6 +120,16 @@ pub enum InterchainGovQueryMsg {
     },
 }
 
+/// App sudo messages
+#[cosmwasm_schema::cw_serde]
+pub enum InterchainGovSudoMsg {
+    #[serde(rename = "kv_query_result")]
+    KVQueryResult {
+        query_id: u64,
+    }
+}
+
+
 #[cosmwasm_schema::cw_serde]
 pub struct ConfigResponse {}
 

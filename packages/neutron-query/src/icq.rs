@@ -34,12 +34,10 @@ pub trait IcqInterface: AccountIdentification + TransferInterface {
     fn neutron_icq<'a>(
         &'a self,
         deps: cosmwasm_std::Deps<'a>,
-        sender: Addr
     ) -> AbstractSdkResult<NeutronIcq<Self>> {
         Ok(NeutronIcq {
             base: self,
             deps,
-            sender
         })
     }
 }
@@ -78,15 +76,9 @@ impl<T> IcqInterface for T where T: AccountIdentification + TransferInterface {}
 pub struct NeutronIcq<'a, T: AccountIdentification + TransferInterface> {
     base: &'a T,
     deps: Deps<'a>,
-    sender: Addr
 }
 
 impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
-
-    /// Sender is the address of the module
-    fn sender(&self) -> Addr {
-        self.sender.clone()
-    }
 
     pub fn connection_id(
         &self,
@@ -97,6 +89,7 @@ impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
 
     pub fn register_interchain_query(
         &self,
+        sender: &Addr,
         chain: ChainName,
         query_type: QueryType,
         keys: Vec<KVKey>,
@@ -105,7 +98,7 @@ impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
     ) -> AbstractSdkResult<CosmosMsg> {
         let connection_id = self.connection_id(chain)?;
 
-        let register_msg = Neutron::register_interchain_query(self.sender(), query_type.to_string(), keys, to_string(&transactions_filter)
+        let register_msg = Neutron::register_interchain_query(sender, query_type.to_string(), keys, to_string(&transactions_filter)
             .map_err(|e| StdError::generic_err(e.to_string()))?, connection_id, update_period);
 
         Ok(register_msg)
@@ -116,8 +109,8 @@ impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
     /// # Arguments
     ///
     /// * `query_id` - The id of the query
-    pub fn remove_interchain_query(&self, query_id: u64) -> AbstractSdkResult<CosmosMsg> {
-        Ok(Neutron::remove_interchain_query(self.sender(), query_id))
+    pub fn remove_interchain_query(&self, sender: &Addr, query_id: u64) -> AbstractSdkResult<CosmosMsg> {
+        Ok(Neutron::remove_interchain_query(sender, query_id))
     }
 
 

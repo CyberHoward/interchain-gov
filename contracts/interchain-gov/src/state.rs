@@ -1,6 +1,6 @@
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Decimal, Env};
+use cosmwasm_std::{Addr, Binary, Decimal, Env, Uint128};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
 use dao_voting::threshold::{PercentageThreshold, Threshold};
@@ -42,8 +42,13 @@ pub const PROPOSALS: Map<ProposalId, (Proposal, DataState)> = Map::new("props");
 /// Remote vote results, None = requested
 pub const VOTE_RESULTS: Map<(ProposalId, &ChainName), Option<GovernanceVote>> = Map::new("vote_results");
 /// Pending vote queries
-pub const GOV_VOTE_QUERIES: Map<(ProposalId, &ChainName), Option<Binary>> = Map::new("pending_queries");
+pub const GOV_VOTE_QUERIES: Map<(ProposalId, &ChainName), Option<TallyResult>> = Map::new("pending_queries");
 pub const TEMP_REMOTE_GOV_MODULE_ADDRS: Map<&ChainName, String> = Map::new("temp_remote_gov_module_addrs");
+
+/// Map queryid -> (chain, prop_id)
+pub const PENDING_REPLIES: Map<u64, (ChainName, ProposalId)> = Map::new("pending_replies");
+/// Map queryid -> chain
+pub const PENDING_QUERIES: Map<u64, (ChainName, ProposalId)> = Map::new("pending_replies");
 
 #[cw_serde]
 pub struct Members {
@@ -177,4 +182,13 @@ impl GovernanceVote {
             governance
         }
     }
+}
+
+/// Tally result from the other chain
+#[cw_serde]
+pub struct TallyResult {
+    pub yes: Uint128,
+    pub no: Uint128,
+    pub abstain: Uint128,
+    pub no_with_veto: Uint128,
 }

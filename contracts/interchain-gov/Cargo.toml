@@ -64,6 +64,7 @@ cw-orch = { workspace = true }
 abstract-interface = { workspace = true }
 neutron-query = { workspace = true }
 
+
 # Dependencies for bins
 clap = { workspace = true, optional = true, features = ["derive"] }
 abstract-client = { workspace = true, optional = true }

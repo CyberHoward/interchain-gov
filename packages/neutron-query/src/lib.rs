@@ -3,6 +3,8 @@ use cosmwasm_schema::cw_serde;
 pub mod icq;
 pub mod gov;
 
+pub use neutron_sdk;
+
 pub const ICQ_PROTOCOL: &str = "ics23";
 
 #[cw_serde]

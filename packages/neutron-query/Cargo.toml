@@ -20,3 +20,4 @@ thiserror = { workspace = true }
 cw-asset = { workspace = true }
 cw-controllers = { workspace = true }
 cosmos-anybuf = { version = "0.1.0", git = "https://github.com/AbstractSDK/cosmos-anybuf" }
+neutron-sdk = { package = "neutron-sdk", git = "https://github.com/neutron-org/neutron-sdk", branch = "feat/proposal-votes" }

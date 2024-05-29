@@ -7,7 +7,7 @@ use abstract_adapter::std::ibc::CallbackInfo;
 use abstract_adapter::std::ibc_client::state::IBC_INFRA;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{Binary, coins, CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, Storage, to_json_binary, to_json_string, WasmQuery};
+use cosmwasm_std::{Binary, coins, CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, Storage, SubMsg, to_json_binary, to_json_string, WasmQuery};
 use neutron_query::gov::create_gov_proposal_keys;
 use neutron_query::icq::IcqInterface;
 use neutron_query::QueryType;
@@ -20,7 +20,7 @@ use crate::{
 use crate::handlers::instantiate::{get_item_state, propose_item_state};
 use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID, FINALIZE_CALLBACK_ID};
 use crate::msg::{InterchainGovIbcMsg, InterchainGovQueryMsg};
-use crate::state::{DataState, VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members, Governance, TEMP_REMOTE_GOV_MODULE_ADDRS, GovernanceVote, VOTE_RESULTS, GOV_VOTE_QUERIES};
+use crate::state::{DataState, VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members, Governance, TEMP_REMOTE_GOV_MODULE_ADDRS, GovernanceVote, VOTE_RESULTS, GOV_VOTE_QUERIES, PENDING_REPLIES, TallyResult};
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -104,6 +104,7 @@ fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: Pr
 }
 
 fn request_gov_vote_details(deps: DepsMut, env: Env, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
+    // check existing vote results
     let existing_vote_results = VOTE_RESULTS.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
 
     // If we don't have any vote results, we need to query them
@@ -122,7 +123,7 @@ fn request_gov_vote_details(deps: DepsMut, env: Env, app: InterchainGov, prop_id
     }
 
     // First, make sure that all votes are in by checking whether we have vote results
-    let exsting_query_results = GOV_VOTE_QUERIES.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<Binary>)>>>()?;
+    let exsting_query_results = GOV_VOTE_QUERIES.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<TallyResult>)>>>()?;
 
     // If we don't have any vote results, we need to query them
     if !exsting_query_results.is_empty() {
@@ -138,24 +139,31 @@ fn request_gov_vote_details(deps: DepsMut, env: Env, app: InterchainGov, prop_id
         }
     };
 
-    let external_members = load_external_members(deps.storage, &env)?;
+    // TODO: check pending replies (could be overwritten)
 
+    let external_members = load_external_members(deps.storage, &env)?;
+    let query_sender = env.contract.address.clone();
 
     // loop through the external members and register interchain queries for their votes
     // These will call the sudo endpoint on our contract
-    let gov_queries = external_members.iter().map(|host| {
-        let icq = app.neutron_icq(deps.as_ref(), env.contract.address.clone())?;
-        let query = icq.register_interchain_query(host.clone(), QueryType::KV, create_gov_proposal_keys(vec![])?, vec![], 0)?;
+    let gov_queries = external_members.iter().enumerate().map(|(index, host)| {
+        let icq = app.neutron_icq(deps.as_ref())?;
+        let query = icq.register_interchain_query(&query_sender, host.clone(), QueryType::KV, create_gov_proposal_keys(vec![])?, vec![], 0)?;
         // store the query as pending
         GOV_VOTE_QUERIES.save(deps.storage, (prop_id.clone(), host), &None)?;
-        Ok(query)
+        let reply_id = index as u64;
+
+        PENDING_REPLIES.save(deps.storage, reply_id, &(host.clone(), prop_id.clone()))?;
+
+        Ok(SubMsg::reply_always(query, reply_id))
     }).collect::<AbstractSdkResult<Vec<_>>>()?;
+
 
     // we should do this all at once
     let withdraw_msg = app.bank(deps.as_ref()).transfer(coins(100000u128, "untrn"), &env.contract.address)?;
     let withdraw_msg: CosmosMsg = app.executor(deps.as_ref()).execute(vec![withdraw_msg])?.into();
 
-    Ok(app.response("request_gov_vote_details").add_attribute("prop_id", prop_id).add_message(withdraw_msg).add_messages(gov_queries))
+    Ok(app.response("request_gov_vote_details").add_attribute("prop_id", prop_id).add_message(withdraw_msg).add_submessages(gov_queries))
 
 }
 
