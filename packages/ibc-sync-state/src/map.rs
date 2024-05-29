@@ -114,7 +114,7 @@ where
         &self,
         storage: &mut dyn Storage,
         key: impl Into<Key>,
-        state: StateChange,
+        initiated_value: V,
     ) -> SyncStateResult<()> {
         let key = key.into();
 
@@ -124,11 +124,12 @@ where
             .save(
                 storage,
                 (self.storage_key(), key.into(), DataState::Initiate.to_num()),
-                &state,
+                &StateChange::Proposal(to_json_binary(&initiated_value)?),
             )
             .map_err(Into::into)
     }
     // Remove init / proposed states
+    // Errors if no proposed state is found or provided
     pub fn finalize_kv_state(
         &self,
         storage: &mut dyn Storage,
@@ -137,9 +138,9 @@ where
     ) -> SyncStateResult<()> {
         let k = key.clone().into();
 
-        let value = {
+        let (value, was_set) = {
             if let Some(value) = value {
-                value
+                (value, true)
             } else {
                 let value: Result<V, _> = match self.load_state_change(storage, k.clone())? {
                     StateChange::Proposal(value) => Ok(from_json(&value)?),
@@ -148,7 +149,7 @@ where
                         state: "Backup".to_string(),
                     }),
                 };
-                value?
+                (value?, false)
             }
         };
 
@@ -169,7 +170,7 @@ where
                 storage,
                 (self.storage_key(), k.clone(), DataState::Proposed.to_num()),
             );
-        } else {
+        } else if !was_set {
             return Err(SyncStateError::NoProposedState);
         }
 

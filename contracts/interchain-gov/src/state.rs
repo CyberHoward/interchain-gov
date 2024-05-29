@@ -29,12 +29,10 @@ pub(self) const MEMBERS_KEY: &'static str = "members";
 pub const MEMBERS: Item<Members> = Item::new(MEMBERS_KEY);
 pub const MEMBERS_STATE_SYNC: MembersSyncState = MembersSyncState::new();
 
-pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
-
 pub const ALLOW_JOINING_GOV: Item<Members> = Item::new("alw");
 
-pub const PROPOSALS: Map<ProposalId, Proposal> = Map::new("props");
-pub const PROPOSAL_STATE_SYNC: MapStateSyncController<'_, ProposalId, Proposal> =
+const PROPOSALS: Map<ProposalId, (Proposal, Vote)> = Map::new("props");
+pub const PROPOSAL_STATE_SYNC: MapStateSyncController<'_, ProposalId, (Proposal, Vote)> =
     MapStateSyncController::new(PROPOSALS);
 
 /// Local members to local data status
@@ -44,7 +42,7 @@ pub mod members_sync_state {
     use abstract_adapter::objects::chain_name::ChainName;
     use cosmwasm_std::{from_json, to_json_binary, StdResult, Storage};
     use cw_storage_plus::Item;
-    use ibc_sync_state::{ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
+    use ibc_sync_state::{DataState, ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
 
     use super::{Members, MEMBERS_KEY};
 
@@ -67,6 +65,12 @@ pub mod members_sync_state {
             self.members.load(storage)
         }
 
+        pub fn external_members(&self,storage: &dyn Storage, env: &Env) -> SyncStateResult<Members> {
+            let mut members = self.load_members(storage)?;
+            members.members.retain(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
+            Ok(members)
+        }
+
         pub fn load_state_change(&self, storage: &dyn Storage) -> SyncStateResult<StateChange> {
             self.item_state_controller
                 .load_state_change(storage, MEMBERS_KEY)
@@ -76,6 +80,7 @@ pub mod members_sync_state {
         pub fn initiate_members(
             &self,
             storage: &mut dyn Storage,
+            env: &Env,
             members: Members,
         ) -> SyncStateResult<()> {
             self.item_state_controller
@@ -85,7 +90,7 @@ pub mod members_sync_state {
                 MEMBERS_KEY.to_string(),
                 StateChange::Proposal(to_json_binary(&members)?),
             )?;
-            let members = self.load_members(storage)?;
+            let members = self.external_members(storage, env)?;
             self.outstanding_acks.save(storage, &members.members)?;
             Ok(())
         }
@@ -184,6 +189,7 @@ impl Members {
 #[non_exhaustive]
 #[cw_serde]
 pub enum ProposalAction {
+    Signal,
     UpdateMembers {
         members: Members,
     },
@@ -233,7 +239,7 @@ pub struct Proposal {
     /// The chain that created this proposal
     pub proposer_chain: ChainName,
     /// Action that the group will perform
-    pub actions: Vec<ProposalAction>,
+    pub action: ProposalAction,
     /// The minimum amount of time this proposal must remain open for
     /// voting. The proposal may not pass unless this is expired or
     /// None.
@@ -260,7 +266,7 @@ impl Proposal {
         Proposal {
             title,
             description,
-            actions,
+            action,
             min_voting_period,
             expiration,
             proposer: proposer.to_string(),
@@ -277,4 +283,14 @@ pub enum Vote {
     Yes,
     No,
     NoVote,
+}
+
+impl Vote {
+    pub fn new(vote: bool) -> Self {
+        if vote {
+            Vote::Yes
+        } else {
+            Vote::No
+        }
+    }
 }

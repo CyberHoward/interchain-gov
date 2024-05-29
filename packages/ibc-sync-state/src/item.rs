@@ -37,6 +37,10 @@ impl ItemStateSyncController {
             .map_err(Into::into)
     }
 
+    pub fn load_changes(&self, storage: &dyn Storage) -> SyncStateResult<Vec<((String, u8), StateChange)>> {
+        self.state_status_map.range(storage, None,None, Order)
+    }
+
     /// Load a state change
     /// Errors if no proposed state is found
     pub fn load_state_change(

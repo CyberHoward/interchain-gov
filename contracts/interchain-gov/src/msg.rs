@@ -2,6 +2,7 @@ use crate::{contract::InterchainGov, state::Members};
 
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::QueryResponses;
+use ibc_sync_state::DataState;
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_adapter::adapter_msg_types!(
@@ -37,11 +38,6 @@ pub enum InterchainGovExecuteMsg {
     },
     ///Called by gov to vote on a proposal
     VoteProposal { prop_hash: String, vote: bool },
-    /// Can be called by any chain to trigger tallying
-    ProposeGovMembers {
-        /// Propose these new members
-        members: Members,
-    },
     AcceptGovInvite {
         /// only accept invites for groups with these members
         members: Members,
@@ -57,7 +53,7 @@ pub struct InterchainGovMigrateMsg {}
 #[cosmwasm_schema::cw_serde]
 pub enum InterchainGovIbcMsg {
     /// Called when this contract is being asked to join a Government
-    JoinGovProposal {
+    JoinGov {
         // All the members in the governance (including this chain)
         members: Members,
     },
@@ -75,7 +71,7 @@ pub enum InterchainGovIbcMsg {
 #[non_exhaustive]
 #[cosmwasm_schema::cw_serde]
 pub enum InterchainGovIbcCallbackMsg {
-    JoinGovProposal { proposed_to: ChainName },
+    JoinGov { proposed_to: ChainName },
     FinalizeProposal { prop_hash: String, proposed_to: ChainName },
     ProposeProposal { prop_hash: String, proposed_to: ChainName },
 }
@@ -105,7 +101,7 @@ pub struct ConfigResponse {}
 #[cosmwasm_schema::cw_serde]
 pub struct MembersResponse {
     pub members: Members,
-    pub state: DataState,
+    pub state: Option<DataState>,
 }
 
 #[cosmwasm_schema::cw_serde]
