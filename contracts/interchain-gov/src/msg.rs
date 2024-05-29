@@ -37,7 +37,7 @@ pub enum InterchainGovExecuteMsg {
     },
     /// Can be called by any chain to trigger tallying
     TallyProposal {
-        prop_hash: String,
+        prop_id: String,
     },
     // TODO: remove, just propose state change
     InviteMember {

@@ -81,4 +81,10 @@ pub enum InterchainGovError {
 
     #[error("Invalid chain. Expected: {expected:?}, Actual: {actual:?}")]
     WrongChain { expected: ChainName, actual: ChainName },
+
+    #[error("Proposal {0} expired")]
+    ProposalExpired(String),
+
+    #[error("Proposal {0} open")]
+    ProposalStillOpen(String),
 }

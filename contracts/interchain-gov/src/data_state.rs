@@ -1,5 +1,6 @@
 use cw_storage_plus::{KeyDeserialize, PrimaryKey};
 use cosmwasm_schema::cw_serde;
+use crate::InterchainGovError;
 
 /// Local members to local data status
 /// Remote member statuses
@@ -58,5 +59,21 @@ impl DataState {
 
     pub fn is_finalized(&self) -> bool {
         matches!(self, DataState::Finalized)
+    }
+
+    pub fn expect_or<F, O: FnOnce(DataState) -> F>(self, expected: DataState, on_mismatch: O) -> Result<(), F> {
+        if self == expected {
+            Ok(())
+        } else {
+            Err(on_mismatch(self))
+        }
+    }
+
+    pub fn finalized_or(&self, err: InterchainGovError) -> Result<(), InterchainGovError> {
+        if self.is_finalized() {
+            Ok(())
+        } else {
+            Err(err)
+        }
     }
 }

@@ -137,5 +137,6 @@ impl Proposal {
 #[cw_serde]
 pub enum Vote {
     Yes,
+    No,
     NoVote
 }

@@ -7,7 +7,7 @@ use abstract_adapter::std::ibc::CallbackInfo;
 use abstract_adapter::std::ibc_client::state::IBC_INFRA;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, to_json_string};
+use cosmwasm_std::{CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, Storage, to_json_string};
 
 use crate::{
     contract::{AdapterResult, InterchainGov},
@@ -30,9 +30,47 @@ pub fn execute_handler(
         InterchainGovExecuteMsg::Propose { proposal } => propose(deps, env, info, adapter, proposal),
         InterchainGovExecuteMsg::Finalize { prop_id } => finalize(deps, env, info, adapter, prop_id),
         InterchainGovExecuteMsg::InviteMember { member } => invite_member(deps, adapter, member),
+        InterchainGovExecuteMsg::VoteProposal { prop_hash: prop_id, vote } => do_vote(deps, env, adapter, prop_id, vote),
+        InterchainGovExecuteMsg::TallyProposal { prop_id } => tally(deps, env, adapter, prop_id),
         InterchainGovExecuteMsg::TestAddMembers { members } => test_add_members(deps, adapter, members),
         _ => todo!()
     }
+}
+
+fn tally(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String) -> AdapterResult {
+    let (prop, state) = load_proposal(deps.storage, &prop_id)?;
+
+    if !prop.expiration.is_expired(&env.block) {
+        return Err(InterchainGovError::ProposalStillOpen(prop_id.clone()));
+    }
+
+    // let external_members = load_external_members(deps.storage, &env)?;
+    Ok(app.response("tally_proposal").add_attribute("prop_id", prop_id))
+}
+
+fn load_proposal(storage: &mut dyn Storage, prop_id: &String) -> Result<(Proposal, DataState), InterchainGovError> {
+    PROPOSALS.load(storage, prop_id.clone()).map_err(|_| InterchainGovError::ProposalNotFound(prop_id.clone()))
+}
+
+// This currently allows for overriding votes
+fn do_vote(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String, vote: bool) -> AdapterResult {
+    let (prop, state) = load_proposal(deps.storage, &prop_id)?;
+
+    state.expect_or(DataState::Finalized, |actual| InterchainGovError::InvalidProposalState {
+        prop_id: prop_id.clone(),
+        chain: ChainName::new(&env),
+        expected: Some(DataState::Finalized),
+        actual: Some(actual),
+    })?;
+
+    if prop.expiration.is_expired(&env.block) {
+        return Err(InterchainGovError::ProposalExpired(prop_id.clone()));
+    }
+
+    let vote = if vote { Vote::Yes } else { Vote::No };
+    LOCAL_VOTE.save(deps.storage, prop_id.clone(), &vote)?;
+
+    Ok(app.response("vote_proposal").add_attribute("prop_id", prop_id))
 }
 
 fn test_add_members(deps: DepsMut, app: InterchainGov, members: Vec<ChainName>) -> AdapterResult {
@@ -66,7 +104,7 @@ fn propose(
         return Err(InterchainGovError::ProposalAlreadyExists(prop_id));
     }
 
-    let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
+    let external_members = load_external_members(deps.storage, &env)?;
     if external_members.is_empty() {
         // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
         PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Finalized))?;
@@ -99,10 +137,15 @@ fn propose(
     Ok(app.response("propose").add_attribute("prop_id", prop_id).add_messages(propose_msgs))
 }
 
+/// Helper to load external members
+fn load_external_members(storage: &mut dyn Storage, env: &Env) -> AdapterResult<Vec<ChainName>> {
+    Ok(MEMBERS.load(storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>())
+}
+
 /// Send finalization message over IBC
 fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
     // check whether it exists
-    let (prop, local_prop_state) = PROPOSALS.load(deps.storage, prop_id.clone()).map_err(|_| InterchainGovError::ProposalNotFound(prop_id.clone()))?;
+    let (prop, local_prop_state) = load_proposal(deps.storage, &prop_id)?;
 
     // The state must be initiated locally (OR we could make it proposed on the final callback?)
     if !local_prop_state.is_proposed() {
@@ -128,7 +171,7 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
     let target_module = this_module(&app)?;
     let callback = CallbackInfo::new(FINALIZE_CALLBACK_ID, None);
 
-    let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
+    let external_members = load_external_members(deps.storage, &env)?;
     let finalize_messages = external_members.iter().map(|host| {
         let ibc_client = app.ibc_client(deps.as_ref());
         let msg = ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::FinalizeProposal {
