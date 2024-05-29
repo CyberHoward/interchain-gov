@@ -83,7 +83,7 @@ fn query_props_state(deps: Deps) -> AdapterResult<ProposalStateResponse> {
             change,
         })
         .collect();
-    println!("Ahhh {:?}", states);
+
     Ok(ProposalStateResponse { state: states })
 }
 

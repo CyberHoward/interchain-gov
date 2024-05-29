@@ -231,14 +231,11 @@ mod propose {
 
         interchain.wait_ibc(A_CHAIN_ID, res)?;
 
-        println!("Proposals A has 0 states");
         let proposals = a_gov.list_proposal_states()?;
         assert_that!(proposals.state).has_length(0);
 
-        println!("Proposals B should have 2 states");
         let proposals = b_gov.list_proposal_states()?;
         assert_that!(proposals.state).has_length(1);
-        println!("Proposals B: {:?}", proposals);
 
         // check the state.
         // should be proposed on A and pending on B
