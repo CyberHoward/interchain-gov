@@ -1,16 +1,12 @@
-use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
-use abstract_adapter::sdk::base::ModuleIbcEndpoint;
+
 use abstract_adapter::sdk::{AbstractSdkResult, IbcInterface};
 use abstract_adapter::std::ibc::CallbackInfo;
-use abstract_adapter::std::ibc_client::state::IBC_INFRA;
+
 use abstract_adapter::std::AbstractResult;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{
-    ensure_eq, to_json_binary, to_json_string, CosmosMsg, DepsMut, Env, MessageInfo, Order,
-    StdResult, Storage,
-};
+use cosmwasm_std::{to_json_binary, CosmosMsg, DepsMut, Env, MessageInfo, StdResult};
 
 use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID};
 use crate::{
@@ -25,7 +21,7 @@ use crate::state::{Proposal, ProposalAction, ProposalId, ProposalMsg, Vote, PROP
 use base64::Engine;
 
 fn tally(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String) -> AdapterResult {
-    let (prop, state) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?;
+    let (prop, _state) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?;
 
     if !prop.expiration.is_expired(&env.block) {
         return Err(InterchainGovError::ProposalStillOpen(prop_id.clone()));
@@ -221,7 +217,7 @@ fn propose(
 pub fn finalize(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     app: InterchainGov,
     prop_id: ProposalId,
 ) -> AdapterResult {

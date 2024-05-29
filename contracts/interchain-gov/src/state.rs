@@ -3,7 +3,7 @@ use std::fmt::Display;
 use abstract_adapter::objects::chain_name::ChainName;
 use base64::Engine;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, CosmosMsg, Decimal, Env};
+use cosmwasm_std::{Addr, Decimal, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
 use dao_voting::threshold::{PercentageThreshold, Threshold};
@@ -42,9 +42,7 @@ pub mod members_sync_state {
     use abstract_adapter::objects::chain_name::ChainName;
     use cosmwasm_std::{from_json, to_json_binary, Env, StdResult, Storage};
     use cw_storage_plus::Item;
-    use ibc_sync_state::{
-        DataState, ItemStateSyncController, StateChange, SyncStateError, SyncStateResult,
-    };
+    use ibc_sync_state::{ItemStateSyncController, StateChange, SyncStateError, SyncStateResult};
 
     use super::{Members, MEMBERS_KEY};
 

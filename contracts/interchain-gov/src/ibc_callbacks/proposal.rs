@@ -1,18 +1,18 @@
-use abstract_adapter::sdk::{AbstractResponse, IbcInterface};
+use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
 use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo};
 
 use crate::contract::{AdapterResult, InterchainGov};
-use crate::handlers::execute::finalize;
-use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
+
+use crate::msg::InterchainGovIbcCallbackMsg;
 use crate::state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::InterchainGovError;
 
 /// Get a callback when a proposal is synced
 pub fn proposal_callback(
     deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
+    _env: Env,
+    _info: MessageInfo,
     app: InterchainGov,
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {

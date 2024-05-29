@@ -1,10 +1,10 @@
 use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
-use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo, Order, StdResult};
+use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo};
 
 use crate::contract::{AdapterResult, InterchainGov};
-use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
-use crate::state::{Proposal, MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
+use crate::msg::InterchainGovIbcCallbackMsg;
+use crate::state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::InterchainGovError;
 
 /// Get a callback when a proposal is finalized
@@ -12,7 +12,7 @@ use crate::InterchainGovError;
 pub fn finalize_callback(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     app: InterchainGov,
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
@@ -21,17 +21,13 @@ pub fn finalize_callback(
         IbcResponseMsg {
             id: _,
             msg: Some(callback_msg),
-            result:
-                CallbackResult::Execute {
-                    result: Ok(_),
-                    ..
-                },
+            result: CallbackResult::Execute { result: Ok(_), .. },
         } => {
             let callback_msg: InterchainGovIbcCallbackMsg = from_json(callback_msg)?;
             match callback_msg {
                 InterchainGovIbcCallbackMsg::FinalizeProposal {
                     proposed_to,
-                    prop_hash: prop_id,
+                    prop_hash: _prop_id,
                 } => {
                     PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
 

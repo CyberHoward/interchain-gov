@@ -4,7 +4,7 @@ use abstract_adapter::objects::chain_name::ChainName;
 use ibc_sync_state::DataState;
 use interchain_gov::{
     contract::interface::InterchainGovInterface,
-    msg::{ConfigResponse, InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
+    msg::{InterchainGovInstantiateMsg, InterchainGovQueryMsgFns},
     state::Members,
     InterchainGovExecuteMsg, MY_ADAPTER_ID, MY_NAMESPACE,
 };
@@ -162,13 +162,13 @@ impl TestEnv<MockBech32> {
         prop_id: ProposalId,
         expected_state: Option<DataState>,
     ) -> anyhow::Result<()> {
-        let state = self.gov.proposal_state(prop_id)?.map(|f|f.state);
+        let state = self.gov.proposal_state(prop_id)?.map(|f| f.state);
         assert_that!(state).is_equal_to(expected_state);
         Ok(())
     }
 }
 
-fn test_proposal(title: impl Into<String>, actions: Vec<ProposalAction>) -> ProposalMsg {
+fn test_proposal(title: impl Into<String>, _actions: Vec<ProposalAction>) -> ProposalMsg {
     ProposalMsg {
         title: title.into(),
         description: "This is a test proposal".to_string(),
@@ -264,8 +264,8 @@ mod finalize {
         b_env.enable_ibc()?;
         ibc_connect_polytone_and_abstract(&interchain, A_CHAIN_ID, B_CHAIN_ID)?;
 
-        let a_gov = a_env.gov.clone();
-        let b_gov = b_env.gov.clone();
+        let _a_gov = a_env.gov.clone();
+        let _b_gov = b_env.gov.clone();
 
         a_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
             members: vec![b_env.chain_name(), a_env.chain_name()].into(),
@@ -284,7 +284,7 @@ mod finalize {
 
         // Finalize a proposal
         let res = a_env.finalize_proposal(prop_id.clone())?;
-        let analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
+        let _analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
         // TODO: this errs
         a_env.assert_prop_state(prop_id.clone(), None)?;
         b_env.assert_prop_state(prop_id, None)?;

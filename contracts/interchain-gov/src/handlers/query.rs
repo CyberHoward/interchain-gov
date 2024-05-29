@@ -1,7 +1,7 @@
 use crate::{
     contract::{AdapterResult, InterchainGov},
     msg::{ConfigResponse, InterchainGovQueryMsg, MapState, ProposalStateResponse},
-    state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC},
+    state::PROPOSAL_STATE_SYNC,
 };
 
 use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse};
@@ -36,7 +36,7 @@ pub fn query_handler(
 fn query_proposals(deps: Deps, proposal_ids: Vec<String>) -> AdapterResult<ProposalsResponse> {
     let mut proposals = vec![];
     for proposal_id in proposal_ids {
-        let (prop, vote) = PROPOSAL_STATE_SYNC.load(deps.storage, proposal_id.clone())?;
+        let (prop, _vote) = PROPOSAL_STATE_SYNC.load(deps.storage, proposal_id.clone())?;
         let data_state = PROPOSAL_STATE_SYNC.data_state(deps.storage, proposal_id.clone());
         proposals.push(ProposalResponse {
             prop_id: proposal_id,
@@ -55,7 +55,7 @@ fn query_list_proposals(deps: Deps) -> AdapterResult<ProposalsResponse> {
 
     let proposals = proposals
         .into_iter()
-        .map(|(prop_id, (prop, vote))| {
+        .map(|(prop_id, (prop, _vote))| {
             let data_state = PROPOSAL_STATE_SYNC.data_state(deps.storage, prop_id.clone());
             crate::msg::ProposalResponse {
                 prop_id,
