@@ -17,21 +17,11 @@ use crate::{
 };
 
 use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
-use crate::state::{Proposal, ProposalAction, ProposalMsg, Vote, LOCAL_VOTE, PROPOSALS, PROPOSAL_STATE_SYNC};
-use abstract_adapter::objects::chain_name::ChainName;
-use abstract_adapter::objects::module::ModuleInfo;
-use abstract_adapter::sdk::base::ModuleIbcEndpoint;
-use abstract_adapter::sdk::{AbstractSdkResult, IbcInterface};
-
-use abstract_adapter::std::ibc_client::state::IBC_INFRA;
-use abstract_adapter::std::AbstractResult;
-use abstract_adapter::traits::AbstractResponse;
-use abstract_adapter::traits::ModuleIdentification;
+use crate::state::{Proposal, ProposalAction, ProposalMsg, Vote, PROPOSAL_STATE_SYNC};
 use base64::Engine;
-use cosmwasm_std::{CosmosMsg, DepsMut, Env, MessageInfo};
 
 fn tally(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String) -> AdapterResult {
-    let (prop, state) = load_proposal(deps.storage, &prop_id)?;
+    let (prop, state) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id)?;
 
     if !prop.expiration.is_expired(&env.block) {
         return Err(InterchainGovError::ProposalStillOpen(prop_id.clone()));
@@ -162,7 +152,7 @@ fn propose(
 /// TODO: call after all succesfull proposals have been cleared
 fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
     // check whether it exists
-    let (prop, local_prop_state) = PROPOSAL
+    PROPOSAL_STATE_SYNC.
 
     // The state must be initiated locally (OR we could make it proposed on the final callback?)
     if !local_prop_state.is_proposed() {
