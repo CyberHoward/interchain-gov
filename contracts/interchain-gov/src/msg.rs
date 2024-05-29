@@ -23,11 +23,21 @@ pub struct InterchainGovInstantiateMsg {
 #[impl_into(ExecuteMsg)]
 pub enum InterchainGovExecuteMsg {
     /// Called by gov when a chain wants to create a proposal
-    Propose { proposal: ProposalMsg },
+    Propose {
+        proposal: ProposalMsg,
+    },
+    /// Finalize the proposal state
+    Finalize {
+        prop_id: ProposalId,
+    },
+    /// Finalize the proposal state
+    #[fn_name("execute_proposal")]
+    Execute {
+        prop_id: ProposalId,
+    },
     ///Called by gov to vote on a proposal
     VoteProposal { prop_hash: String, vote: bool },
     /// Can be called by any chain to trigger tallying
-    TallyProposal { prop_hash: String },
     ProposeGovMembers {
         /// Propose these new members
         members: Members,
@@ -35,6 +45,9 @@ pub enum InterchainGovExecuteMsg {
     AcceptGovInvite {
         /// only accept invites for groups with these members
         members: Members,
+    },
+    TallyProposal {
+        prop_id: String,
     },
 }
 
@@ -53,16 +66,18 @@ pub enum InterchainGovIbcMsg {
         prop: Proposal,
         /// information used to identify the recipient in the callback
         chain: ChainName,
-    }, // SyncState {
-       //     key: String,
-       //     value: Binary
-       // }
+    },
+    FinalizeProposal {
+        prop_hash: String,
+    },
 }
 
 #[non_exhaustive]
 #[cosmwasm_schema::cw_serde]
 pub enum InterchainGovIbcCallbackMsg {
     JoinGovProposal { proposed_to: ChainName },
+    FinalizeProposal { prop_hash: String, proposed_to: ChainName },
+    ProposeProposal { prop_hash: String, proposed_to: ChainName },
 }
 
 /// App query messages
@@ -74,6 +89,14 @@ pub enum InterchainGovQueryMsg {
     Config {},
     #[returns(MembersResponse)]
     Members {},
+    // #[returns(PendingProposalStates)]
+    // PendingProposals {},
+    #[returns(ProposalsResponse)]
+    ListProposals {},
+    #[returns(ProposalResponse)]
+    Proposal {
+        prop_id: ProposalId,
+    }
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -82,4 +105,17 @@ pub struct ConfigResponse {}
 #[cosmwasm_schema::cw_serde]
 pub struct MembersResponse {
     pub members: Members,
+    pub state: DataState,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct ProposalsResponse {
+    pub proposals: Vec<ProposalResponse>
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct ProposalResponse {
+    pub prop_id: ProposalId,
+    pub prop: Proposal,
+    pub state: DataState,
 }

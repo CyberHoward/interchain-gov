@@ -56,12 +56,10 @@ pub enum InterchainGovError {
     #[error("Unauthorized IBC message")]
     UnauthorizedIbcMessage,
 
-    // #[error("IBC Message failed: {:?}")]
-    // IbcFailed(IbcResponseMsg),
     #[error("Unknown callback message: {0}")]
     UnknownCallbackMessage(String),
 
-    #[error("{prop_id} on {chain} already has state {state}")]
+    #[error("{prop_id} on {chain} already has state {state:?}")]
     PreExistingProposalState {
         prop_id: ProposalId,
         chain: ChainName,
@@ -69,4 +67,24 @@ pub enum InterchainGovError {
     },
     #[error("Ibc failed: {0}")]
     IbcFailed(String),
+
+    #[error("Proposal {0} not found")]
+    ProposalNotFound(String),
+
+    #[error("Proposal {prop_id} not {expected:?} on chain: {chain}, rather {actual:?}")]
+    InvalidProposalState {
+        prop_id: ProposalId,
+        expected: Option<DataState>,
+        actual: Option<DataState>,
+        chain: ChainName
+    },
+
+    #[error("Invalid chain. Expected: {expected:?}, Actual: {actual:?}")]
+    WrongChain { expected: ChainName, actual: ChainName },
+
+    #[error("Proposal {0} expired")]
+    ProposalExpired(String),
+
+    #[error("Proposal {0} open")]
+    ProposalStillOpen(String),
 }

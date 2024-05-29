@@ -6,7 +6,6 @@ use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Binary, Decimal, Env};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
-
 use dao_voting::threshold::{PercentageThreshold, Threshold};
 use ibc_sync_state::MapStateSyncController;
 use members_sync_state::MembersSyncState;
@@ -185,13 +184,8 @@ impl Members {
 #[non_exhaustive]
 #[cw_serde]
 pub enum ProposalAction {
-    /// Add member action
     UpdateMembers {
         members: Members,
-    },
-    SyncItem {
-        key: String,
-        value: Binary,
     },
 }
 
@@ -239,7 +233,7 @@ pub struct Proposal {
     /// The chain that created this proposal
     pub proposer_chain: ChainName,
     /// Action that the group will perform
-    pub action: ProposalAction,
+    pub actions: Vec<ProposalAction>,
     /// The minimum amount of time this proposal must remain open for
     /// voting. The proposal may not pass unless this is expired or
     /// None.
@@ -266,7 +260,7 @@ impl Proposal {
         Proposal {
             title,
             description,
-            action,
+            actions,
             min_voting_period,
             expiration,
             proposer: proposer.to_string(),
@@ -281,5 +275,6 @@ impl Proposal {
 #[cw_serde]
 pub enum Vote {
     Yes,
+    No,
     NoVote,
 }

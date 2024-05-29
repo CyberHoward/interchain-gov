@@ -1,16 +1,19 @@
+use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::ModuleIbcMsg;
 use cosmwasm_std::{from_json, DepsMut, Env};
 
 use crate::contract::{AdapterResult, InterchainGov};
+use crate::data_state::DataState;
 use crate::msg::InterchainGovIbcMsg;
 
-use crate::state::{ALLOW_JOINING_GOV, MEMBERS_STATE_SYNC};
+use crate::state::{ALLOW_JOINING_GOV, MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::{InterchainGovError, MY_ADAPTER_ID};
 
+/// TODO
 pub fn module_ibc_handler(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     app: InterchainGov,
     ibc_msg: ModuleIbcMsg,
 ) -> AdapterResult {
@@ -28,8 +31,10 @@ pub fn module_ibc_handler(
 
     println!("parsed_msg: {:?}", ibc_msg);
 
+    let our_chain = ChainName::new(&env);
+
     match ibc_msg {
-        InterchainGovIbcMsg::JoinGovProposal { members } => {
+        InterchainGovIbcMsg::JoinGov{ members } => {
             // Check that the data has been finalized before.
             MEMBERS_STATE_SYNC.assert_finalized(deps.storage)?;
 
@@ -43,6 +48,26 @@ pub fn module_ibc_handler(
             MEMBERS_STATE_SYNC.finalize_members(deps.storage, Some(members))?;
 
             Ok(app.response("module_ibc"))
+        }
+        InterchainGovIbcMsg::ProposeProposal { prop_hash, prop, chain } => {
+            // check that we were supposed to receive the message
+            if chain != our_chain {
+                return Err(InterchainGovError::WrongChain {
+                    expected: our_chain,
+                    actual: chain,
+                });
+            }
+
+            // update proposal state to "proposed"
+            PROPOSAL_STATE_SYNC.propose_kv_state(storage, key, (prop, Vote::NoVote))?;
+            
+            Ok(app.response("module_ibc").add_attribute("action", "propose"))
+        }
+        InterchainGovIbcMsg::FinalizeProposal { prop_hash: prop_id } => {
+            
+            PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?;
+
+            Ok(app.response("module_ibc").add_attribute("action", "finalize"))
         }
         _ => Err(InterchainGovError::UnauthorizedIbcMessage {}),
     }
