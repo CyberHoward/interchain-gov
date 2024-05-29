@@ -78,4 +78,7 @@ pub enum InterchainGovError {
         actual: Option<DataState>,
         chain: ChainName
     },
+
+    #[error("Invalid chain. Expected: {expected:?}, Actual: {actual:?}")]
+    WrongChain { expected: ChainName, actual: ChainName },
 }

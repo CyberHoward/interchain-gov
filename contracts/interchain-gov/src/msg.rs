@@ -60,7 +60,7 @@ pub enum InterchainGovIbcMsg {
         chain: ChainName,
     }
     // SyncState {
-    //     key: String,
+    //     key: String
     //     value: Binary
     // }
 }

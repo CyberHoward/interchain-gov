@@ -1,6 +1,6 @@
 use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
-use cosmwasm_std::{DepsMut, Env, from_json, MessageInfo, Order};
+use cosmwasm_std::{DepsMut, Env, from_json, MessageInfo, Order, StdResult};
 
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::InterchainGovError;
@@ -32,7 +32,7 @@ pub fn finalize_callback(
 
                     // Ensure that it was proposed
                     let prev_state = REMOTE_PROPOSAL_STATE.may_load(deps.storage, (prop_id.clone(), &chain))?;
-                    if prev_state.map_or(true, |state| !state.is_proposed()) {
+                    if prev_state.clone().map_or(true, |state| !state.is_proposed()) {
                         return Err(InterchainGovError::InvalidProposalState {
                             prop_id: prop_id.clone(),
                             chain: chain.clone(),
@@ -42,10 +42,10 @@ pub fn finalize_callback(
                     }
 
                     // Remove the pending state
-                    REMOTE_PROPOSAL_STATE.remove(deps.storage, (prop_id.clone(), &chain))?;
+                    REMOTE_PROPOSAL_STATE.remove(deps.storage, (prop_id.clone(), &chain));
 
                     // If we have no more pending states, we can update the proposal state to proposed
-                    let prop_states: Vec<_> = REMOTE_PROPOSAL_STATE.prefix(prop_id).keys(deps.storage, None, None, Order::Ascending).take(1).collect()?;
+                    let prop_states = REMOTE_PROPOSAL_STATE.prefix(prop_id.clone()).keys(deps.storage, None, None, Order::Ascending).take(1).collect::<StdResult<Vec<_>>>()?;
                     if prop_states.is_empty() {
                         PROPOSALS.update(deps.storage, prop_id.clone(), |prop| -> Result<(Proposal, DataState), InterchainGovError> {
                             match prop {
