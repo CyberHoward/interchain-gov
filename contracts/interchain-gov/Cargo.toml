@@ -53,6 +53,7 @@ schemars = { workspace = true }
 cw-asset = { workspace = true }
 abstract-adapter = { workspace = true }
 const_format = { workspace = true }
+sha2 = { workspace = true }
 
 serde = "1"
 cw-utils = "1.0.3"

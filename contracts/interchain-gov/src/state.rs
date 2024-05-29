@@ -7,17 +7,35 @@ use dao_voting::{status::Status};
 use dao_voting::threshold::{PercentageThreshold, Threshold};
 
 
-pub type ProposalId = u32;
+pub type ProposalId = String;
+pub type StorageKey = String;
+pub type Key = String;
 
-pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("our_vote");
+pub enum StateChange {
+    Backup(Binary),
+    Proposal(Binary),
+}
 
-pub const PROPS: Map<ProposalId, (DataState, Binary)> = Map::new("props");
+/// LOCAL
+/// Instantiate: members ([A]) -> DNE
+/// Propose adding B: members ([A]) -> initialized, Proposal([A, B])
+/// Propose Callback: members([A, B]) -> finalized, None
+///
+///
+/// REMOTE
+/// Instantiate: members ([B]) -> DNE
+/// Proposal received: members([A, B]) -> proposed, Backup([A])
+pub const ITEMS_DATA_STATE: Map<(StorageKey, DataState), StateChange> = Map::new("item_data");
+pub const MAPS_DATA_STATE: Map<(StorageKey, Key, DataState), StateChange> = Map::new("map_data");
+pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
 
+pub const MEMBERS: Item<Members> = Item::new("members");
 
+pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
+
+pub const PROPOSALS: Map<ProposalId, Proposal> = Map::new("props");
 /// Local members to local data status
-pub const MEMBERS: Item<(Members, DataState)> = Item::new("members");
 /// Remote member statuses
-pub const MEMBER_UPDATES: Map<ChainName, DataState> = Map::new("member_updates");
 
 // Mabye we should do Map<Key, DataStatus>
 
@@ -52,6 +70,19 @@ impl Members {
     }
 }
 
+#[non_exhaustive]
+#[cw_serde]
+pub enum ProposalAction {
+    /// Add member action
+    InviteMember {
+        member: ChainName
+    },
+    SyncItem {
+        key: String,
+        value: Binary
+    }
+}
+
 #[cw_serde]
 pub struct ProposalMsg {
     /// The title of the proposal
@@ -65,6 +96,8 @@ pub struct ProposalMsg {
     /// The the time at which this proposal will expire and close for
     /// additional votes.
     pub expiration: Expiration,
+    /// A standard action that the group can run
+    pub action: ProposalAction
 }
 
 // https://github.com/DA0-DA0/dao-contracts/blob/development/contracts/proposal/dao-proposal-single/src/proposal.rs
@@ -79,6 +112,8 @@ pub struct Proposal {
     pub proposer: String,
     /// The chain that created this proposal
     pub proposer_chain: ChainName,
+    /// Action that the group will perform
+    pub action: ProposalAction,
     /// The minimum amount of time this proposal must remain open for
     /// voting. The proposal may not pass unless this is expired or
     /// None.
@@ -88,23 +123,33 @@ pub struct Proposal {
     pub expiration: Expiration,
     /// The threshold at which this proposal will pass.
     pub threshold: Threshold,
-    /// The proposal status
-    pub status: Status,
+    // /// The proposal status
+    // pub status: Status,
 }
 
 impl Proposal {
     pub fn new(proposal: ProposalMsg, proposer: &Addr, env: &Env) -> Self {
+
+        let ProposalMsg {
+            title,
+            description,
+            min_voting_period,
+            expiration,
+            action
+        } = proposal;
+
         Proposal {
-            title: proposal.title,
-            description: proposal.description,
+            title,
+            description,
+            action,
+            min_voting_period,
+            expiration,
             proposer: proposer.to_string(),
             proposer_chain: ChainName::new(env),
-            min_voting_period: proposal.min_voting_period,
             threshold: Threshold::AbsolutePercentage {
                 percentage: PercentageThreshold::Percent(Decimal::percent(100))
             },
-            expiration: proposal.expiration,
-            status: Status::Open
+            // status: Status::Open
         }
     }
 }

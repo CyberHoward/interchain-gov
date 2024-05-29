@@ -1,5 +1,7 @@
 use abstract_adapter::{sdk::AbstractSdkError, std::AbstractError, AdapterError};
+use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
+use abstract_adapter::std::ibc::IbcResponseMsg;
 use cosmwasm_std::StdError;
 use cw_asset::AssetError;
 use cw_controllers::AdminError;
@@ -53,4 +55,16 @@ pub enum InterchainGovError {
     #[error("Unauthorized IBC message")]
     UnauthorizedIbcMessage,
 
+    #[error("IBC Message failed: {:?}")]
+    IbcFailed(IbcResponseMsg),
+
+    #[error("Unknown callback message: {0}")]
+    UnknownCallbackMessage(String),
+
+    #[error("{prop_id} on {chain} already has state {state}")]
+    PreExistingProposalState {
+        prop_id: ProposalId,
+        chain: ChainName,
+        state: DataState
+    }
 }
