@@ -29,7 +29,7 @@ pub enum StateChange {
 // TODO: implement KEy
 pub const ITEMS_DATA_STATE: Map<(StorageKey, DataState), StateChange> = Map::new("item_data");
 pub const MAPS_DATA_STATE: Map<(StorageKey, Key, DataState), StateChange> = Map::new("map_data");
-pub const PROPOSAL_STATE: Map<(ProposalId, &ChainName), DataState> = Map::new("prop_state");
+pub const REMOTE_PROPOSAL_STATE: Map<(ProposalId, &ChainName), DataState> = Map::new("prop_state");
 
 pub const MEMBERS: Item<Members> = Item::new("members");
 

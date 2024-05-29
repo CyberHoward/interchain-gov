@@ -32,7 +32,7 @@ pub fn propose_item_state<'a, T: Serialize + DeserializeOwned>(
 )  -> StdResult<()> {
     let key = std::str::from_utf8(item.as_slice())?.to_string();
     let pending = to_json_binary(&proposed_state)?;
-    ITEMS_DATA_STATE.save(storage, (key, DataState::Initiate), &StateChange::Proposal(pending))
+    ITEMS_DATA_STATE.save(storage, (key, DataState::Initiated), &StateChange::Proposal(pending))
 }
 
 pub fn get_item_state<'a, T: Serialize + DeserializeOwned>(

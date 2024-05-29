@@ -3,7 +3,7 @@ use crate::{error::InterchainGovError, handlers, msg::{InterchainGovExecuteMsg, 
 use abstract_adapter::AdapterContract;
 use cosmwasm_std::Response;
 use crate::dependencies::IBC_CLIENT_DEP;
-use crate::ibc_callbacks::PROPOSE_CALLBACK_ID;
+use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID};
 
 /// The type of the adapter that is used to build your Adapter and access the Abstract SDK features.
 pub type InterchainGov = AdapterContract<
@@ -21,7 +21,8 @@ const INTERCHAIN_GOV: InterchainGov = InterchainGov::new(MY_ADAPTER_ID, ADAPTER_
     .with_query(handlers::query_handler)
     .with_module_ibc(handlers::module_ibc_handler)
     .with_ibc_callbacks(&[
-        (PROPOSE_CALLBACK_ID, ibc_callbacks::proposal::proposal_callback)
+        (PROPOSE_CALLBACK_ID, ibc_callbacks::proposal_callback),
+        (FINALIZE_CALLBACK_ID, ibc_callbacks::finalize_callback)
     ])
     .with_dependencies(&[IBC_CLIENT_DEP]);
 

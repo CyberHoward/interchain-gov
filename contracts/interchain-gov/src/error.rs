@@ -74,8 +74,8 @@ pub enum InterchainGovError {
     #[error("Proposal {prop_id} not {expected:?} on chain: {chain}, rather {actual:?}")]
     InvalidProposalState {
         prop_id: ProposalId,
-        expected: DataState,
-        actual: DataState,
+        expected: Option<DataState>,
+        actual: Option<DataState>,
         chain: ChainName
     },
 }

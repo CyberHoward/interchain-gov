@@ -17,7 +17,7 @@ use crate::{
 use crate::handlers::instantiate::{get_item_state, propose_item_state};
 use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID};
 use crate::msg::{InterchainGovIbcMsg};
-use crate::state::{DataState, LOCAL_VOTE, MEMBERS, Proposal, PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote};
+use crate::state::{DataState, LOCAL_VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote};
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -30,9 +30,6 @@ pub fn execute_handler(
         InterchainGovExecuteMsg::Propose { proposal } => propose(deps, env, info, adapter, proposal),
         InterchainGovExecuteMsg::Finalize { prop_id } => finalize(deps, env, info, adapter, prop_id),
         InterchainGovExecuteMsg::InviteMember { member } => invite_member(deps, adapter, member),
-        // InterchainGovExecuteMsg::TallyProposal { prop_hash } => {
-        //     tally_proposal(deps, adapter, prop_hash)
-        // },
         _ => todo!()
     }
 }
@@ -60,14 +57,13 @@ fn propose(
     }
 
     // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
-    PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Initiate))?;
+    PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Initiated))?;
 
     // 2.
     LOCAL_VOTE.save(deps.storage, prop_id.clone(), &Vote::Yes)?;
 
     // 3.
     let target_module = this_module(&app)?;
-
     let callback = CallbackInfo::new(PROPOSE_CALLBACK_ID, None);
     // Loop through members and propose to them the proposal (TODO: do we actually need ourselves stored)?
     let external_members = MEMBERS.load(deps.storage)?.members.into_iter().filter(|m| m != &ChainName::new(&env)).collect::<Vec<_>>();
@@ -81,7 +77,7 @@ fn propose(
             chain: host.clone(),
         }, Some(callback.clone()))?;
 
-        PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host), &DataState::Initiate)?;
+        REMOTE_PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host), &DataState::Initiated)?;
         Ok(msg)
     }).collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
 
@@ -94,26 +90,24 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
     let (prop, local_prop_state) = PROPOSALS.load(deps.storage, prop_id.clone()).map_err(|_| InterchainGovError::ProposalNotFound(prop_id.clone()))?;
 
     // The state must be initiated locally (OR we could make it proposed on the final callback?)
-    if !local_prop_state.is_initiated() {
+    if !local_prop_state.is_proposed() {
         return Err(InterchainGovError::InvalidProposalState {
             prop_id: prop_id.clone(),
             chain: ChainName::new(&env),
-            expected: DataState::Initiate,
-            actual: local_prop_state,
+            expected: Some(DataState::Proposed),
+            actual: Some(local_prop_state),
         });
     }
 
-    // ensure that all remote chains are in proposed state
-    let prop_states = PROPOSAL_STATE.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, DataState)>>>()?;
-    for (chain, state) in prop_states {
-        if !state.is_proposed() {
-            return Err(InterchainGovError::InvalidProposalState {
-                prop_id: prop_id.clone(),
-                chain: chain.clone(),
-                expected: DataState::Proposed,
-                actual: state,
-            });
-        }
+    // ensure that all remote chains have no state
+    let mut prop_states = REMOTE_PROPOSAL_STATE.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).take(1).collect::<StdResult<Vec<(ChainName, DataState)>>>()?;
+    if let Some((chain, state)) = prop_states.pop() {
+        return Err(InterchainGovError::InvalidProposalState {
+            prop_id: prop_id.clone(),
+            chain,
+            expected: Some(DataState::Proposed),
+            actual: Some(state),
+        });
     }
 
     let ibc_client = app.ibc_client(deps.as_ref());
@@ -132,13 +126,14 @@ fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop
     Ok(app.response("finalize").add_attribute("prop_id", prop_id).add_messages(finalize_messages))
 }
 
-/// A
-
+/// TODO
 fn invite_member(
     deps: DepsMut,
     app: InterchainGov,
     new_member: ChainName
 ) -> AdapterResult {
+
+    todo!();
     // TODO: auth
 
     // check whether member is in the list
