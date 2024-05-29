@@ -94,8 +94,22 @@ pub enum InterchainGovError {
         chains: Vec<ChainName>
     },
 
+    #[error("Gov Votes still pending for {prop_id} on {chains:?}")]
+    GovVotesStillPending {
+        prop_id: ProposalId,
+        chains: Vec<ChainName>
+    },
+
+    #[error("Missing vote results for {prop_id}, should call RequestVoteResults first")]
+    MissingVoteResults {
+        prop_id: ProposalId,
+    },
+
     #[error("Votes already finalized {0}")]
     VotesAlreadyFinalized(String),
+
+    #[error("Gov votes already queried {0}")]
+    GovVotesAlreadyQueried(String),
 
     #[error("Unrequested vote result for {chain:?}, {prop_id}")]
     UnrequestedVote {

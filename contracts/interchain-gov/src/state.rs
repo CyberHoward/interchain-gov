@@ -42,7 +42,7 @@ pub const PROPOSALS: Map<ProposalId, (Proposal, DataState)> = Map::new("props");
 /// Remote vote results, None = requested
 pub const VOTE_RESULTS: Map<(ProposalId, &ChainName), Option<GovernanceVote>> = Map::new("vote_results");
 /// Pending vote queries
-pub const GOV_VOTE_QUERIES: Map<ProposalId, (ChainName, Option<Binary>)> = Map::new("pending_queries");
+pub const GOV_VOTE_QUERIES: Map<(ProposalId, &ChainName), Option<Binary>> = Map::new("pending_queries");
 pub const TEMP_REMOTE_GOV_MODULE_ADDRS: Map<&ChainName, String> = Map::new("temp_remote_gov_module_addrs");
 
 #[cw_serde]

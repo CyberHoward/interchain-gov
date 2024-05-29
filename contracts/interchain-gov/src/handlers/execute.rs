@@ -1,13 +1,16 @@
 use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
-use abstract_adapter::sdk::{AbstractSdkResult, IbcInterface};
+use abstract_adapter::sdk::{AbstractSdkResult, Execution, IbcInterface, TransferInterface};
 use abstract_adapter::sdk::base::{ModuleIbcEndpoint};
 use abstract_adapter::std::AbstractResult;
 use abstract_adapter::std::ibc::CallbackInfo;
 use abstract_adapter::std::ibc_client::state::IBC_INFRA;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, Storage, to_json_binary, to_json_string, WasmQuery};
+use cosmwasm_std::{Binary, coins, CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, Storage, to_json_binary, to_json_string, WasmQuery};
+use neutron_query::gov::create_gov_proposal_keys;
+use neutron_query::icq::IcqInterface;
+use neutron_query::QueryType;
 
 use crate::{
     contract::{AdapterResult, InterchainGov},
@@ -17,7 +20,7 @@ use crate::{
 use crate::handlers::instantiate::{get_item_state, propose_item_state};
 use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID, FINALIZE_CALLBACK_ID};
 use crate::msg::{InterchainGovIbcMsg, InterchainGovQueryMsg};
-use crate::state::{DataState, VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members, VOTES, Governance, TEMP_REMOTE_GOV_MODULE_ADDRS, GovernanceVote, VOTE_RESULTS};
+use crate::state::{DataState, VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members, Governance, TEMP_REMOTE_GOV_MODULE_ADDRS, GovernanceVote, VOTE_RESULTS, GOV_VOTE_QUERIES};
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -32,6 +35,7 @@ pub fn execute_handler(
         InterchainGovExecuteMsg::InviteMember { member } => invite_member(deps, adapter, member),
         InterchainGovExecuteMsg::VoteProposal { prop_id, vote, governance } => do_vote(deps, env, adapter, prop_id, vote, governance),
         InterchainGovExecuteMsg::RequestVoteResults { prop_id } => request_vote_results(deps, env, adapter, prop_id),
+        InterchainGovExecuteMsg::RequestGovVoteDetails { prop_id } => request_gov_vote_details(deps, env, adapter, prop_id),
         InterchainGovExecuteMsg::TestAddMembers { members } => test_add_members(deps, adapter, members),
         InterchainGovExecuteMsg::TemporaryRegisterRemoteGovModuleAddrs { modules } => temporary_register_remote_gov_module_addrs(deps, adapter, modules),
         _ => todo!()
@@ -46,7 +50,7 @@ fn temporary_register_remote_gov_module_addrs(deps: DepsMut, app: InterchainGov,
     Ok(app.response("register_remote_gov_module_addrs"))
 }
 
-fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String) -> AdapterResult {
+fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
     let (prop, state) = load_proposal(deps.storage, &prop_id)?;
 
     // We can only tally upon expiration
@@ -54,10 +58,10 @@ fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: St
         return Err(InterchainGovError::ProposalStillOpen(prop_id.clone()));
     }
 
-    // Check whether the result is already finalized
-    if VOTES.may_load(deps.storage, prop_id.clone())?.is_some() {
-        return Err(InterchainGovError::VotesAlreadyFinalized(prop_id.clone()));
-    }
+    // // Check whether the result is already finalized
+    // if VOTES.may_load(deps.storage, prop_id.clone())?.is_some() {
+    //     return Err(InterchainGovError::VotesAlreadyFinalized(prop_id.clone()));
+    // }
 
     // First, make sure that all votes are in by checking whether we have vote results
     let existing_vote_results = VOTE_RESULTS.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
@@ -99,29 +103,67 @@ fn request_vote_results(deps: DepsMut, env: Env, app: InterchainGov, prop_id: St
     Ok(app.response("query_vote_results").add_attribute("prop_id", prop_id).add_messages(vote_queries))
 }
 
-fn query_gov_vote_results() {
-    // // All queries must be resolved
-    // if let Some(pending_votes) = GOV_VOTE_QUERIES.may_load(deps.storage, prop_id.clone())? {
-    //     return Err(InterchainGovError::VotesStillPending {
-    //         prop_id: prop_id.clone(),
-    //         chains: pending_votes.into_iter().map(|(chain, _)| chain).collect(),
-    //     });
-    // }
+fn request_gov_vote_details(deps: DepsMut, env: Env, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
+    let existing_vote_results = VOTE_RESULTS.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
 
-    // let icq = app.neutron_icq(deps.as_ref(), env.contract.address)?;
+    // If we don't have any vote results, we need to query them
+    if existing_vote_results.is_empty() {
+        return Err(InterchainGovError::MissingVoteResults {
+            prop_id: prop_id.clone(),
+        });
+    } else {
+        // if we have pending votes, check they're all resolved
+        if existing_vote_results.iter().any(|(_, vote)| vote.is_none()) {
+            return Err(InterchainGovError::VotesStillPending {
+                prop_id: prop_id.clone(),
+                chains: existing_vote_results.into_iter().map(|(chain, _)| chain.clone()).collect(),
+            })
+        }
+    }
 
-    // // loop through the external members and register interchain queries for their votes
-    // let gov_queries = external_members.iter().map(|host| {
-    //     let query = icq.register_interchain_query(host, QueryType::KV, create_gov_proposal_keys(vec![]), vec![], 0)?;
-    //     Ok(query)
-    //     VOTE_QUERIES.save(deps.storage, prop_id.clone(), &(host.clone(), query))?;
-    //
-    // }).collect::<AbstractSdkResult<Vec<_>>>()?;
-    //
-    // // we should do this all at once
-    // let withdraw_msg = app.bank(deps.as_ref()).transfer(coins(100000u128, "untrn"), &env.contract.address)?;
-    // let withdraw_msg = app.executor(deps.as_ref()).execute(vec![withdraw_msg])?.into();
+    // First, make sure that all votes are in by checking whether we have vote results
+    let exsting_query_results = GOV_VOTE_QUERIES.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<Binary>)>>>()?;
 
+    // If we don't have any vote results, we need to query them
+    if !exsting_query_results.is_empty() {
+        // if we have pending votes, check they're all resolved
+        return if exsting_query_results.iter().any(|(_, vote)| vote.is_none()) {
+            Err(InterchainGovError::GovVotesStillPending {
+                prop_id: prop_id.clone(),
+                chains: exsting_query_results.into_iter().map(|(chain, _)| chain.clone()).collect(),
+            })
+        } else {
+            // happy path error
+            Err(InterchainGovError::GovVotesAlreadyQueried(prop_id.clone()))
+        }
+    };
+
+    let external_members = load_external_members(deps.storage, &env)?;
+
+
+    // loop through the external members and register interchain queries for their votes
+    // These will call the sudo endpoint on our contract
+    let gov_queries = external_members.iter().map(|host| {
+        let icq = app.neutron_icq(deps.as_ref(), env.contract.address.clone())?;
+        let query = icq.register_interchain_query(host.clone(), QueryType::KV, create_gov_proposal_keys(vec![])?, vec![], 0)?;
+        // store the query as pending
+        GOV_VOTE_QUERIES.save(deps.storage, (prop_id.clone(), host), &None)?;
+        Ok(query)
+    }).collect::<AbstractSdkResult<Vec<_>>>()?;
+
+    // we should do this all at once
+    let withdraw_msg = app.bank(deps.as_ref()).transfer(coins(100000u128, "untrn"), &env.contract.address)?;
+    let withdraw_msg: CosmosMsg = app.executor(deps.as_ref()).execute(vec![withdraw_msg])?.into();
+
+    Ok(app.response("request_gov_vote_details").add_attribute("prop_id", prop_id).add_message(withdraw_msg).add_messages(gov_queries))
+
+}
+
+fn check_existing_votes<E: FnOnce() -> AdapterResult<()>>(deps: &DepsMut, prop_id: &ProposalId, has_all_votes_handler: E) -> AdapterResult<()> {
+// First, make sure that all votes are in by checking whether we have vote results
+
+
+    Ok(())
 }
 
 fn load_proposal(storage: &mut dyn Storage, prop_id: &String) -> Result<(Proposal, DataState), InterchainGovError> {

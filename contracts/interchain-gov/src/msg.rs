@@ -36,8 +36,11 @@ pub enum InterchainGovExecuteMsg {
         governance: Governance,
         vote: Vote,
     },
-    /// Can be called by any chain to trigger tallying
+    /// Request results from remote chains
     RequestVoteResults {
+        prop_id: String,
+    },
+    RequestGovVoteDetails {
         prop_id: String,
     },
     // TODO: remove, just propose state change
