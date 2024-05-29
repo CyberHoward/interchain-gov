@@ -33,9 +33,17 @@ pub const REMOTE_PROPOSAL_STATE: Map<(ProposalId, &ChainName), DataState> = Map:
 
 pub const MEMBERS: Item<Members> = Item::new("members");
 
-pub const LOCAL_VOTE: Map<ProposalId, Vote> = Map::new("vote");
+// TODO: should we actually have these as separate maps?
+
+pub const VOTE: Map<ProposalId, GovernanceVote> = Map::new("vote");
+pub const VOTES: Map<ProposalId, (ChainName, GovernanceVote)> = Map::new("votes");
 
 pub const PROPOSALS: Map<ProposalId, (Proposal, DataState)> = Map::new("props");
+/// Remote vote results, None = requested
+pub const VOTE_RESULTS: Map<(ProposalId, &ChainName), Option<GovernanceVote>> = Map::new("vote_results");
+/// Pending vote queries
+pub const GOV_VOTE_QUERIES: Map<ProposalId, (ChainName, Option<Binary>)> = Map::new("pending_queries");
+pub const TEMP_REMOTE_GOV_MODULE_ADDRS: Map<&ChainName, String> = Map::new("temp_remote_gov_module_addrs");
 
 #[cw_serde]
 pub struct Members {
@@ -134,9 +142,38 @@ impl Proposal {
     }
 }
 
+#[non_exhaustive]
 #[cw_serde]
 pub enum Vote {
     Yes,
     No,
-    NoVote
+    NoVote,
+    Ratio(u64, u64)
+}
+
+#[non_exhaustive]
+#[cw_serde]
+pub enum Governance {
+    CosmosSDK {
+        proposal_id: u64
+    },
+    DaoDao {
+        dao_address: String,
+        proposal_id: u64
+    }
+}
+
+#[cw_serde]
+pub struct GovernanceVote {
+    pub vote: Vote,
+    pub governance: Governance
+}
+
+impl GovernanceVote {
+    pub fn new(governance: Governance, vote: Vote) -> Self {
+        GovernanceVote {
+            vote,
+            governance
+        }
+    }
 }

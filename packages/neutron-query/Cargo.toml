@@ -1,0 +1,22 @@
+[package]
+name = "neutron-query"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+
+[dependencies]
+cosmwasm-std = { workspace = true }
+cosmwasm-schema = { workspace = true }
+cw-storage-plus = { workspace = true }
+abstract-app = { workspace = true}
+abstract-sdk = { workspace = true}
+abstract-adapter = { workspace = true}
+cw-orch = { workspace = true }
+thiserror = { workspace = true }
+cw-asset = { workspace = true }
+cw-controllers = { workspace = true }
+cosmos-anybuf = { version = "0.1.0", git = "https://github.com/AbstractSDK/cosmos-anybuf" }

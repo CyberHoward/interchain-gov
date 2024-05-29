@@ -1,3 +1,4 @@
+use abstract_adapter::objects::chain_name::ChainName;
 use crate::{
     contract::{AdapterResult, InterchainGov},
     msg::{ConfigResponse, InterchainGovQueryMsg},
@@ -5,12 +6,12 @@ use crate::{
 
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, StdResult, Order};
 use crate::handlers::instantiate::get_item_state;
-use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse};
-use crate::state::{MEMBERS, ProposalId, PROPOSALS};
+use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse, VoteResponse};
+use crate::state::{GovernanceVote, MEMBERS, ProposalId, PROPOSALS, VOTE};
 
 pub fn query_handler(
     deps: Deps,
-    _env: Env,
+    env: Env,
     _adapter: &InterchainGov,
     msg: InterchainGovQueryMsg,
 ) -> AdapterResult<Binary> {
@@ -19,6 +20,7 @@ pub fn query_handler(
         InterchainGovQueryMsg::Members {} => to_json_binary(&query_members(deps)?),
         InterchainGovQueryMsg::Proposal { prop_id } => to_json_binary(&query_proposal(deps, prop_id)?),
         InterchainGovQueryMsg::ListProposals { } => to_json_binary(&query_proposals(deps)?),
+        InterchainGovQueryMsg::Vote { prop_id } => to_json_binary(&query_vote(deps, env, prop_id)?),
     }
     .map_err(Into::into)
 }
@@ -61,4 +63,18 @@ fn query_members(deps: Deps) -> StdResult<MembersResponse> {
 
 fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     Ok(ConfigResponse {})
+}
+
+fn query_vote(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteResponse> {
+    let GovernanceVote {
+        vote,
+        governance
+    } = VOTE.load(deps.storage, prop_id.clone())?;
+
+    Ok(VoteResponse {
+        vote,
+        governance,
+        prop_id,
+        chain: ChainName::new(&env)
+    })
 }

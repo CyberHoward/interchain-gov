@@ -62,6 +62,7 @@ dao-voting = "2.3.0"
 # Dependencies for interface
 cw-orch = { workspace = true }
 abstract-interface = { workspace = true }
+neutron-query = { workspace = true }
 
 # Dependencies for bins
 clap = { workspace = true, optional = true, features = ["derive"] }

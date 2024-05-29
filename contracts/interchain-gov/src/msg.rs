@@ -5,7 +5,7 @@ use cosmwasm_schema::QueryResponses;
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_adapter::adapter_msg_types!(InterchainGov, InterchainGovExecuteMsg, InterchainGovQueryMsg);
-use crate::state::{DataState, Proposal, ProposalId, ProposalMsg};
+use crate::state::{DataState, Governance, Proposal, ProposalId, ProposalMsg, Vote};
 
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
@@ -32,11 +32,12 @@ pub enum InterchainGovExecuteMsg {
     },
     ///Called by gov to vote on a proposal
     VoteProposal {
-        prop_hash: String,
+        prop_id: String,
+        governance: Governance,
         vote: bool,
     },
     /// Can be called by any chain to trigger tallying
-    TallyProposal {
+    RequestVoteResults {
         prop_id: String,
     },
     // TODO: remove, just propose state change
@@ -46,7 +47,10 @@ pub enum InterchainGovExecuteMsg {
     /// Temporaryy override
     TestAddMembers {
         members: Vec<ChainName>
-    }
+    },
+    TemporaryRegisterRemoteGovModuleAddrs {
+        modules: Vec<(ChainName, String)>
+    },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -99,7 +103,13 @@ pub enum InterchainGovQueryMsg {
     #[returns(ProposalResponse)]
     Proposal {
         prop_id: ProposalId,
-    }
+    },
+    /// Get the local vote
+    #[returns(VoteResponse)]
+    Vote {
+        prop_id: ProposalId,
+        // chain: Option<ChainName>
+    },
 }
 
 #[cosmwasm_schema::cw_serde]
@@ -121,4 +131,13 @@ pub struct ProposalResponse {
     pub prop_id: ProposalId,
     pub prop: Proposal,
     pub state: DataState,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct VoteResponse {
+    // TODO: maybe this field should not be included
+    pub prop_id: ProposalId,
+    pub chain: ChainName,
+    pub governance: Governance,
+    pub vote: Vote,
 }

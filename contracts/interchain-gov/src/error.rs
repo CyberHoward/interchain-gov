@@ -87,4 +87,24 @@ pub enum InterchainGovError {
 
     #[error("Proposal {0} open")]
     ProposalStillOpen(String),
+
+    #[error("Votes still pending for {prop_id} on {chains:?}")]
+    VotesStillPending {
+        prop_id: ProposalId,
+        chains: Vec<ChainName>
+    },
+
+    #[error("Votes already finalized {0}")]
+    VotesAlreadyFinalized(String),
+
+    #[error("Unrequested vote result for {chain:?}, {prop_id}")]
+    UnrequestedVote {
+        chain: ChainName,
+        prop_id: ProposalId
+    },
+    #[error("Existing vote result for {chain:?}, {prop_id}")]
+    ExistingVoteResult {
+        chain: ChainName,
+        prop_id: ProposalId
+    },
 }
