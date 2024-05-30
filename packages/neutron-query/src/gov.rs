@@ -1,5 +1,5 @@
 use cosmos_anybuf::types::neutron::interchainqueries::KVKey;
-use cosmwasm_std::{StdResult};
+use cosmwasm_std::StdResult;
 
 /// Key for Proposals in the **gov** module's storage
 /// <https://github.com/cosmos/cosmos-sdk/blob/35ae2c4c72d4aeb33447d5a7af23ca47f786606e/x/gov/types/keys.go#L41>
@@ -24,7 +24,7 @@ pub fn create_gov_proposal_keys(proposals_ids: Vec<u64>) -> StdResult<Vec<KVKey>
     for id in proposals_ids {
         let kv_key = KVKey {
             path: GOV_STORE_KEY.to_string(),
-            key: create_gov_proposal_key(id)?
+            key: create_gov_proposal_key(id)?,
         };
 
         kv_keys.push(kv_key)

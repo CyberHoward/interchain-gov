@@ -37,10 +37,13 @@ pub const VOTE: Map<ProposalId, GovernanceVote> = Map::new("vote");
 pub const VOTES: Map<ProposalId, (ChainName, GovernanceVote)> = Map::new("votes");
 
 /// Remote vote results, None = requested
-pub const VOTE_RESULTS: Map<(ProposalId, &ChainName), Option<GovernanceVote>> = Map::new("vote_results");
+pub const VOTE_RESULTS: Map<(ProposalId, &ChainName), Option<GovernanceVote>> =
+    Map::new("vote_results");
 /// Pending vote queries
-pub const GOV_VOTE_QUERIES: Map<(ProposalId, &ChainName), Option<TallyResult>> = Map::new("pending_queries");
-pub const TEMP_REMOTE_GOV_MODULE_ADDRS: Map<&ChainName, String> = Map::new("temp_remote_gov_module_addrs");
+pub const GOV_VOTE_QUERIES: Map<(ProposalId, &ChainName), Option<TallyResult>> =
+    Map::new("pending_queries");
+pub const TEMP_REMOTE_GOV_MODULE_ADDRS: Map<&ChainName, String> =
+    Map::new("temp_remote_gov_module_addrs");
 
 /// Map queryid -> (chain, prop_id)
 pub const PENDING_REPLIES: Map<u64, (ChainName, ProposalId)> = Map::new("pending_replies");
@@ -49,6 +52,9 @@ pub const PENDING_QUERIES: Map<u64, (ChainName, ProposalId)> = Map::new("pending
 const PROPOSALS: Map<ProposalId, (Proposal, Vote)> = Map::new("props");
 pub const PROPOSAL_STATE_SYNC: MapStateSyncController<'_, ProposalId, (Proposal, Vote)> =
     MapStateSyncController::new(PROPOSALS);
+
+pub const FINALIZED_PROPOSALS: Map<ProposalId, (Proposal, ProposalOutcome)> =
+    Map::new("finalized_props");
 
 /// Local members to local data status
 /// Remote member statuses
@@ -78,6 +84,10 @@ pub mod members_sync_state {
 
         pub fn load_members(&self, storage: &dyn Storage) -> StdResult<Members> {
             self.members.load(storage)
+        }
+
+        pub fn save_members(&self, storage: &mut dyn Storage, members: &Members) -> StdResult<()> {
+            self.members.save(storage, members)
         }
 
         pub fn external_members(
@@ -307,35 +317,37 @@ pub enum Vote {
     Yes,
     No,
     NoVote,
-    Ratio(u64, u64)
 }
 
 #[non_exhaustive]
 #[cw_serde]
 pub enum Governance {
     CosmosSDK {
-        proposal_id: u64
+        proposal_id: u64,
     },
     DaoDao {
         dao_address: String,
-        proposal_id: u64
+        proposal_id: u64,
     },
-    Manual {}
+    Manual {},
 }
 
 #[cw_serde]
 pub struct GovernanceVote {
     pub vote: Vote,
-    pub governance: Governance
+    pub governance: Governance,
 }
 
 impl GovernanceVote {
     pub fn new(governance: Governance, vote: Vote) -> Self {
-        GovernanceVote {
-            vote,
-            governance
-        }
+        GovernanceVote { vote, governance }
     }
+}
+#[cw_serde]
+pub struct ProposalOutcome {
+    pub passed: bool,
+    pub votes_for: u8,
+    pub votes_against: u8,
 }
 
 /// Tally result from the other chain
@@ -346,7 +358,6 @@ pub struct TallyResult {
     pub abstain: Uint128,
     pub no_with_veto: Uint128,
 }
-
 
 impl Vote {
     pub fn new(vote: bool) -> Self {

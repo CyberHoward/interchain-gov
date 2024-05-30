@@ -1,11 +1,15 @@
-use crate::{error::InterchainGovError, handlers, msg::{InterchainGovExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsg}, ADAPTER_VERSION, MY_ADAPTER_ID, ibc_callbacks, replies};
+use crate::{
+    error::InterchainGovError,
+    handlers, ibc_callbacks,
+    msg::{InterchainGovExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsg},
+    replies, ADAPTER_VERSION, MY_ADAPTER_ID,
+};
 
+use crate::dependencies::IBC_CLIENT_DEP;
+use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID, REGISTER_VOTE_ID};
+use crate::msg::InterchainGovSudoMsg;
 use abstract_adapter::AdapterContract;
 use cosmwasm_std::{Empty, Response};
-use crate::dependencies::IBC_CLIENT_DEP;
-use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID, FINALIZE_CALLBACK_ID};
-use crate::msg::InterchainGovSudoMsg;
-
 
 /// The type of the adapter that is used to build your Adapter and access the Abstract SDK features.
 pub type InterchainGov = AdapterContract<
@@ -14,7 +18,7 @@ pub type InterchainGov = AdapterContract<
     InterchainGovExecuteMsg,
     InterchainGovQueryMsg,
     Empty,
-    InterchainGovSudoMsg
+    InterchainGovSudoMsg,
 >;
 /// The type of the result returned by your Adapter's entry points.
 pub type AdapterResult<T = Response> = Result<T, InterchainGovError>;
@@ -27,7 +31,7 @@ const INTERCHAIN_GOV: InterchainGov = InterchainGov::new(MY_ADAPTER_ID, ADAPTER_
     .with_ibc_callbacks(&[
         (PROPOSE_CALLBACK_ID, ibc_callbacks::proposal_callback),
         (FINALIZE_CALLBACK_ID, ibc_callbacks::finalize_callback),
-        (REGISTER_VOTE_ID, ibc_callbacks::vote_result_callback)
+        (REGISTER_VOTE_ID, ibc_callbacks::vote_result_callback),
     ])
     // WE need a reply for every member
     .with_replies(&[

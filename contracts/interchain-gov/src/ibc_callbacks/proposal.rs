@@ -50,6 +50,12 @@ pub fn proposal_callback(
                         // return finalize(deps, env, info, app, prop_id);
                     }
                 }
+                InterchainGovIbcCallbackMsg::ProposalResult {
+                    prop_hash: _,
+                    proposed_to,
+                } => {
+                    PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
+                }
                 _ => unimplemented!(),
             }
         }

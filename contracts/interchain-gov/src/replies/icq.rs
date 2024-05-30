@@ -1,12 +1,13 @@
-use abstract_adapter::sdk::AbstractResponse;
-use cosmwasm_std::{DepsMut, Env, from_json, Reply, StdError, StdResult, SubMsgResponse, SubMsgResult};
 use crate::contract::{AdapterResult, InterchainGov};
-use crate::InterchainGovError;
-use neutron_query::neutron_sdk::bindings::msg::MsgRegisterInterchainQueryResponse;
 use crate::state::{PENDING_QUERIES, PENDING_REPLIES};
+use crate::InterchainGovError;
+use abstract_adapter::sdk::AbstractResponse;
+use cosmwasm_std::{
+    from_json, DepsMut, Env, Reply, StdError, StdResult, SubMsgResponse, SubMsgResult,
+};
+use neutron_query::neutron_sdk::bindings::msg::MsgRegisterInterchainQueryResponse;
 
 pub fn icq_reply(deps: DepsMut, _env: Env, app: InterchainGov, reply: Reply) -> AdapterResult {
-
     println!("icq_reply: {:?}", reply);
 
     // remove the pending reply
@@ -24,12 +25,14 @@ pub fn icq_reply(deps: DepsMut, _env: Env, app: InterchainGov, reply: Reply) -> 
 }
 
 pub fn get_query_id(msg_result: SubMsgResult) -> StdResult<u64> {
-    let res: MsgRegisterInterchainQueryResponse = from_json(msg_result
-        .into_result()
-        .map_err(StdError::generic_err)?
-        .data
-        .ok_or_else(|| StdError::generic_err("no result"))?
-        .as_slice())?;
+    let res: MsgRegisterInterchainQueryResponse = from_json(
+        msg_result
+            .into_result()
+            .map_err(StdError::generic_err)?
+            .data
+            .ok_or_else(|| StdError::generic_err("no result"))?
+            .as_slice(),
+    )?;
 
     Ok(res.id)
 }
