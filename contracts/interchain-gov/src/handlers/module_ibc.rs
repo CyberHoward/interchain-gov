@@ -67,14 +67,12 @@ pub fn module_ibc_handler(
 
             // update proposal state to "proposed". Member will vote `NoVote` on the proposal by default
             PROPOSAL_STATE_SYNC.propose_kv_state(deps.storage, prop_hash, (prop, Vote::NoVote))?;
-
             Ok(app
                 .response("module_ibc")
                 .add_attribute("action", "propose"))
         }
         InterchainGovIbcMsg::FinalizeProposal { prop_hash: prop_id } => {
             PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?;
-
             Ok(app
                 .response("module_ibc")
                 .add_attribute("action", "finalize"))

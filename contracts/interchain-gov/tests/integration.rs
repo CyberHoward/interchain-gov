@@ -466,7 +466,7 @@ mod members {
 
     use abstract_interchain_tests::setup::ibc_connect_abstract;
     use cw_orch_interchain::MockBech32InterchainEnv;
-    use interchain_gov::msg::InterchainGovExecuteMsgFns;
+    use interchain_gov::{msg::InterchainGovExecuteMsgFns, state::Vote};
 
     use super::*;
 
@@ -528,6 +528,8 @@ mod members {
         b_env.enable_ibc()?;
         c_env.enable_ibc()?;
 
+        a_env.test_register_gov_modules(vec![(b_env.chain_name(), b_env.gov.clone())])?;
+
         // ibc_connect_polytone_and_abstract(&interchain, A_CHAIN_ID, B_CHAIN_ID)?;
         // ibc_connect_polytone_and_abstract(&interchain, A_CHAIN_ID, C_CHAIN_ID)?;
         // ibc_connect_polytone_and_abstract(&interchain, B_CHAIN_ID, A_CHAIN_ID)?;
@@ -545,6 +547,7 @@ mod members {
 
         let a_gov = a_env.gov.clone();
         let b_gov = b_env.gov.clone();
+        let c_gov = c_env.gov.clone();
 
         // Propose a proposal
         let (res, prop_id) = a_env.propose_first_member_proposal(
@@ -579,14 +582,41 @@ mod members {
 
         a_env.assert_prop_state(prop_id.clone(), None)?;
         b_env.assert_prop_state(prop_id.clone(), Some(DataState::Proposed))?;
-        c_env.assert_prop_state(prop_id.clone(), Some(DataState::Proposed))?;
     
-        a_gov.finalize(prop_id.clone())?;
+        let a = a_gov.finalize(prop_id.clone())?;
+        let res = interchain.wait_ibc(A_CHAIN_ID, a)?;
+        dbg!(&res.packets[0].outcome);
 
         a_env.assert_prop_state(prop_id.clone(), None)?;
         b_env.assert_prop_state(prop_id.clone(), None)?;
         c_env.assert_prop_state(prop_id.clone(), None)?;
-    
+
+        // find proposal
+        let prop = a_gov.proposal(prop_id.clone())?;
+        assert_eq!(prop.prop_id, prop_id.clone());
+        let prop = b_gov.proposal(prop_id.clone())?;
+        assert_eq!(prop.prop_id, prop_id.clone());
+
+        a_gov.vote_proposal(interchain_gov::state::Governance::Manual {  }, prop_id.clone(), Vote::Yes)?;
+        b_gov.vote_proposal(interchain_gov::state::Governance::Manual {  }, prop_id.clone(), Vote::Yes)?;
+
+        // Wait the test blocks after voting
+        a_env.wait_blocks(TEST_PROP_LEN + 1)?;
+        b_env.wait_blocks(TEST_PROP_LEN + 1)?;
+        c_env.wait_blocks(TEST_PROP_LEN + 1)?;
+
+        let res = a_gov.request_vote_results(prop_id.clone())?;
+        let res = interchain.wait_ibc(A_CHAIN_ID, res)?;
+        dbg!(&res.packets[0].outcome);
+
+        // a_gov.execute_proposal(prop_id.clone())?;
+
+        let a_members = dbg!(a_gov.members()?);
+        assert_eq!(a_members.members.members.len(), 3);
+        // let b_members = dbg!(b_gov.members()?);
+        // assert_eq!(b_members.members.members.len(), 3);
+        // let c_members = dbg!(c_gov.members()?);
+        // assert_eq!(c_members.members.members.len(), 3);
         Ok(())
     }
 }

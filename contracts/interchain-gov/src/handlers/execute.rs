@@ -594,7 +594,7 @@ pub fn finalize(
             Ok(msg)
         })
         .collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
-
+    
     Ok(app
         .response("finalize")
         .add_attribute("prop_id", prop_id)
