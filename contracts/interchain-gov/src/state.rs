@@ -182,8 +182,11 @@ pub mod members_sync_state {
 
             self.members.save(storage, &members)?;
 
-            self.item_state_controller
-                .finalize_item_state(storage, MEMBERS_KEY.to_string(), set)?;
+            self.item_state_controller.finalize_item_state(
+                storage,
+                MEMBERS_KEY.to_string(),
+                set,
+            )?;
             Ok(())
         }
 

@@ -30,7 +30,7 @@ pub fn finalize_callback(
                     prop_hash: _prop_id,
                 } => {
                     PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
-                    
+
                     if !PROPOSAL_STATE_SYNC.has_outstanding_acks(deps.storage)? {
                         // finalize my proposal
                         MEMBERS_STATE_SYNC.finalize_members(deps.storage, None)?;

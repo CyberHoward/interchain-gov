@@ -21,9 +21,9 @@ use crate::msg::InterchainGovQueryMsg;
 use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
 use crate::state::{
     Governance, GovernanceVote, Members, Proposal, ProposalAction, ProposalId, ProposalMsg,
-    ProposalOutcome, TallyResult, Vote, FINALIZED_PROPOSALS, GOV_VOTE_QUERIES, MEMBERS,
-    MEMBERS_STATE_SYNC, PENDING_REPLIES, PROPOSAL_STATE_SYNC, TEMP_REMOTE_GOV_MODULE_ADDRS, VOTE,
-    VOTE_RESULTS,
+    ProposalOutcome, TallyResult, Vote, ALLOW_JOINING_GOV, FINALIZED_PROPOSALS, GOV_VOTE_QUERIES,
+    MEMBERS, MEMBERS_STATE_SYNC, PENDING_REPLIES, PROPOSAL_STATE_SYNC,
+    TEMP_REMOTE_GOV_MODULE_ADDRS, VOTE, VOTE_RESULTS,
 };
 use crate::{
     contract::{AdapterResult, InterchainGov},
@@ -63,6 +63,10 @@ pub fn execute_handler(
             temporary_register_remote_gov_module_addrs(deps, adapter, modules)
         }
         InterchainGovExecuteMsg::Execute { prop_id } => execute_prop(deps, env, adapter, prop_id),
+        InterchainGovExecuteMsg::SetAcceptGovInvite { members } => {
+            ALLOW_JOINING_GOV.save(deps.storage, &members)?;
+            Ok(adapter.response("set_accept_gov_invite"))
+        }
         _ => todo!(),
     }
 }
@@ -146,16 +150,44 @@ fn execute_prop(
     let external_members = MEMBERS_STATE_SYNC.external_members(deps.storage, &env)?;
 
     // Execute the prop
-    match prop.action {
-        ProposalAction::UpdateMembers { members } => {
+    let new_member_msgs = match prop.action {
+        ProposalAction::UpdateMembers { mut members } => {
             // If new members exclude self, update members to only be self
             if !members.members.contains(&ChainName::new(&env)) {
                 MEMBERS_STATE_SYNC.save_members(deps.storage, &Members::new(&env))?;
             }
+            let old_members = MEMBERS_STATE_SYNC.load_members(deps.storage)?;
             MEMBERS_STATE_SYNC.save_members(deps.storage, &members)?;
+            let ibc_client = app.ibc_client(deps.as_ref());
+            let exec_msg = InterchainGovIbcMsg::JoinGov {
+                members: members.clone(),
+            };
+
+            // if new members, send them an inclusion msg
+            members.members.retain(|c| !old_members.members.contains(c));
+            let new_members = members;
+            // send inclusion messages to these chains
+
+            let mut msgs = vec![];
+            let target_module = this_module(&app)?;
+            for host in new_members.members.iter() {
+                let callback = CallbackInfo::new(
+                    PROPOSE_CALLBACK_ID,
+                    Some(to_json_binary(&InterchainGovIbcCallbackMsg::JoinGov {
+                        proposed_to: host.clone(),
+                    })?),
+                );
+                msgs.push(ibc_client.module_ibc_action(
+                    host.to_string(),
+                    target_module.clone(),
+                    &exec_msg,
+                    Some(callback.clone()),
+                )?);
+            }
+            msgs
         }
-        ProposalAction::Signal => {}
-    }
+        ProposalAction::Signal => vec![],
+    };
 
     // Send mgs to other members to report vote outcome
 
@@ -189,6 +221,7 @@ fn execute_prop(
     return Ok(app
         .response("propose_members")
         .add_messages(msgs)
+        .add_messages(new_member_msgs)
         .add_attribute("prop_id", prop_id));
 }
 
@@ -245,9 +278,11 @@ fn request_vote_results(
                 host.to_string(),
                 WasmQuery::Smart {
                     contract_addr: module_addr,
-                    msg: to_json_binary(&crate::msg::QueryMsg::Module(InterchainGovQueryMsg::Vote {
-                        prop_id: prop_id.clone(),
-                    }))?,
+                    msg: to_json_binary(&crate::msg::QueryMsg::Module(
+                        InterchainGovQueryMsg::Vote {
+                            prop_id: prop_id.clone(),
+                        },
+                    ))?,
                 },
                 CallbackInfo::new(REGISTER_VOTE_ID, None),
             )?;
@@ -594,7 +629,7 @@ pub fn finalize(
             Ok(msg)
         })
         .collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
-    
+
     Ok(app
         .response("finalize")
         .add_attribute("prop_id", prop_id)

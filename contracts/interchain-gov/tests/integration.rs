@@ -14,8 +14,8 @@ use abstract_adapter::std::{adapter, adapter::AdapterRequestMsg, objects::namesp
 use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
 use abstract_cw_orch_polytone::Polytone;
 // Use prelude to get all the necessary imports
-use cw_orch_interchain::{ChannelCreator, MockBech32InterchainEnv, Starship};
 use cw_orch_interchain::InterchainEnv;
+use cw_orch_interchain::{ChannelCreator, MockBech32InterchainEnv, Starship};
 
 use cw_orch::{anyhow, prelude::*};
 // use cw_orch_interchain::{prelude::*};
@@ -236,11 +236,7 @@ impl<Env: CwEnv> TestEnv<Env> {
     }
 }
 
-fn test_proposal(
-    title: impl Into<String>,
-    action: ProposalAction,
-    exp_height: u64,
-) -> ProposalMsg {
+fn test_proposal(title: impl Into<String>, action: ProposalAction, exp_height: u64) -> ProposalMsg {
     ProposalMsg {
         title: title.into(),
         description: "This is a test proposal".to_string(),
@@ -536,14 +532,13 @@ mod members {
         // ibc_connect_polytone_and_abstract(&interchain, B_CHAIN_ID, C_CHAIN_ID)?;
         // ibc_connect_polytone_and_abstract(&interchain, C_CHAIN_ID, A_CHAIN_ID)?;
         // ibc_connect_polytone_and_abstract(&interchain, C_CHAIN_ID, B_CHAIN_ID)?;
-        
+
         ibc_connect_abstract(&interchain, A_CHAIN_ID, B_CHAIN_ID)?;
         ibc_connect_abstract(&interchain, A_CHAIN_ID, C_CHAIN_ID)?;
         ibc_connect_abstract(&interchain, B_CHAIN_ID, A_CHAIN_ID)?;
         ibc_connect_abstract(&interchain, B_CHAIN_ID, C_CHAIN_ID)?;
         ibc_connect_abstract(&interchain, C_CHAIN_ID, A_CHAIN_ID)?;
         ibc_connect_abstract(&interchain, C_CHAIN_ID, B_CHAIN_ID)?;
-
 
         let a_gov = a_env.gov.clone();
         let b_gov = b_env.gov.clone();
@@ -567,7 +562,7 @@ mod members {
         a_env.assert_prop_state(prop_id.clone(), None)?;
         b_env.assert_prop_state(prop_id.clone(), None)?;
 
-        // A and B are friends now. 
+        // A and B are friends now.
         // Propose to add C
 
         let (res, prop_id) = a_env.propose_proposal(
@@ -582,7 +577,7 @@ mod members {
 
         a_env.assert_prop_state(prop_id.clone(), None)?;
         b_env.assert_prop_state(prop_id.clone(), Some(DataState::Proposed))?;
-    
+
         let a = a_gov.finalize(prop_id.clone())?;
         let res = interchain.wait_ibc(A_CHAIN_ID, a)?;
         dbg!(&res.packets[0].outcome);
@@ -597,8 +592,16 @@ mod members {
         let prop = b_gov.proposal(prop_id.clone())?;
         assert_eq!(prop.prop_id, prop_id.clone());
 
-        a_gov.vote_proposal(interchain_gov::state::Governance::Manual {  }, prop_id.clone(), Vote::Yes)?;
-        b_gov.vote_proposal(interchain_gov::state::Governance::Manual {  }, prop_id.clone(), Vote::Yes)?;
+        a_gov.vote_proposal(
+            interchain_gov::state::Governance::Manual {},
+            prop_id.clone(),
+            Vote::Yes,
+        )?;
+        b_gov.vote_proposal(
+            interchain_gov::state::Governance::Manual {},
+            prop_id.clone(),
+            Vote::Yes,
+        )?;
 
         // Wait the test blocks after voting
         a_env.wait_blocks(TEST_PROP_LEN + 1)?;
@@ -609,10 +612,21 @@ mod members {
         let res = interchain.wait_ibc(A_CHAIN_ID, res)?;
         dbg!(&res.packets[0].outcome);
 
-        a_gov.execute_proposal(prop_id.clone())?;
+        // let c accept invite
+        c_gov.set_accept_gov_invite(
+            vec![a_env.chain_name(), b_env.chain_name(), c_env.chain_name()].into(),
+        )?;
+
+        let res = a_gov.execute_proposal(prop_id.clone())?;
 
         let a_members = dbg!(a_gov.members()?);
         assert_eq!(a_members.members.members.len(), 3);
+
+        let res = interchain.wait_ibc(A_CHAIN_ID, res)?;
+        dbg!(&res.packets[0].outcome);
+
+        let c_members = dbg!(c_gov.members()?);
+        assert_eq!(c_members.members.members.len(), 3);
         Ok(())
     }
 }
