@@ -28,7 +28,7 @@ sha2 = { workspace = true }
 base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
 
 serde = "1"
-cw-utils = "1.0.3"
+cw-utils = "2.0.0"
 dao-voting = "2.3.0"
 
 # Dependencies for interface
