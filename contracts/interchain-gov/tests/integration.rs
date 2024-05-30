@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use abstract_adapter::objects::chain_name::ChainName;
 use ibc_sync_state::DataState;
 use interchain_gov::{
@@ -10,7 +8,7 @@ use interchain_gov::{
 };
 
 use abstract_adapter::std::manager::ExecuteMsgFns;
-use abstract_adapter::std::{adapter, adapter::AdapterRequestMsg, objects::namespace::Namespace};
+use abstract_adapter::std::{adapter, objects::namespace::Namespace};
 use abstract_client::{AbstractClient, Account, Application, Environment, Publisher};
 use abstract_cw_orch_polytone::Polytone;
 // Use prelude to get all the necessary imports
@@ -22,7 +20,7 @@ use cw_orch::{anyhow, prelude::*};
 use speculoos::prelude::*;
 
 use abstract_interchain_tests::setup::ibc_connect_polytone_and_abstract;
-use cw_orch::mock::cw_multi_test::AppResponse;
+
 use cw_orch::tokio::runtime::Runtime;
 use cw_utils::Expiration;
 use interchain_gov::state::{ProposalAction, ProposalId, ProposalMsg};
@@ -358,7 +356,7 @@ mod query_vote_results {
             prop_id: prop_id.clone(),
         })?;
 
-        let analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
+        let _analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
 
         let vote_results = a_gov.vote_results(prop_id.clone())?;
         println!("Vote results: {:?}", vote_results);
@@ -428,8 +426,8 @@ fn starship_test() -> anyhow::Result<()> {
     b_env.enable_ibc()?;
     ibc_connect_polytone_and_abstract(&interchain, A_CHAIN_ID, B_CHAIN_ID)?;
 
-    let a_gov = a_env.gov.clone();
-    let b_gov = b_env.gov.clone();
+    let _a_gov = a_env.gov.clone();
+    let _b_gov = b_env.gov.clone();
 
     a_env.execute_gov(InterchainGovExecuteMsg::TestAddMembers {
         members: vec![b_env.chain_name()].into(),
@@ -448,7 +446,7 @@ fn starship_test() -> anyhow::Result<()> {
 
     // Finalize a proposal
     let res = a_env.finalize_proposal(prop_id.clone())?;
-    let analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
+    let _analysis = interchain.wait_ibc(A_CHAIN_ID, res)?;
 
     a_env.assert_prop_state(prop_id.clone(), None)?;
     b_env.assert_prop_state(prop_id, None)?;

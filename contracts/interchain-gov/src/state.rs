@@ -3,7 +3,7 @@ use std::fmt::Display;
 use abstract_adapter::objects::chain_name::ChainName;
 use base64::Engine;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Binary, Decimal, Env, Uint128};
+use cosmwasm_std::{Addr, Decimal, Env, Uint128};
 use cw_storage_plus::{Item, Map};
 use cw_utils::Expiration;
 use dao_voting::threshold::{PercentageThreshold, Threshold};
@@ -25,7 +25,7 @@ pub type Key = String;
 
 // pub const PROPOSAL_STATE: Map<(ProposalId, ChainName), DataState> = Map::new("prop_state");
 
-pub const MEMBERS_KEY: &'static str = "members";
+pub const MEMBERS_KEY: &str = "members";
 pub const MEMBERS: Item<Members> = Item::new(MEMBERS_KEY);
 pub const MEMBERS_STATE_SYNC: MembersSyncState = MembersSyncState::new();
 pub const OUTSTANDING_ACKS: Item<Vec<ChainName>> = Item::new("acks");
@@ -96,7 +96,7 @@ pub mod members_sync_state {
             env: &Env,
         ) -> SyncStateResult<Members> {
             let mut members = self.load_members(storage)?;
-            members.members.retain(|m| m != &ChainName::new(&env));
+            members.members.retain(|m| m != &ChainName::new(env));
             Ok(members)
         }
 
@@ -170,7 +170,7 @@ pub mod members_sync_state {
                     (members, true)
                 } else {
                     let members: Result<Members, _> = match self.load_state_change(storage)? {
-                        StateChange::Proposal(members) => Ok(from_json(&members)?),
+                        StateChange::Proposal(members) => Ok(from_json(members)?),
                         _ => Err(SyncStateError::DataNotFinalized {
                             key: MEMBERS_KEY.to_string(),
                             state: "Backup".to_string(),

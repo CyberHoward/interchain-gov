@@ -201,11 +201,7 @@ where
 
         self.state_status_map.save(
             storage,
-            (
-                self.storage_key(),
-                key.into(),
-                DataState::Initiated.to_num(),
-            ),
+            (self.storage_key(), key, DataState::Initiated.to_num()),
             &StateChange::Proposal(to_json_binary(&initiated_value)?),
         )?;
         self.outstanding_acks.save(storage, &outstanding_acks)?;
@@ -236,7 +232,7 @@ where
                 (value, true)
             } else {
                 let value: Result<V, _> = match self.load_state_change(storage, k.clone())? {
-                    StateChange::Proposal(value) => Ok(from_json(&value)?),
+                    StateChange::Proposal(value) => Ok(from_json(value)?),
                     _ => Err(SyncStateError::DataNotFinalized {
                         key: k.to_string(),
                         state: "Backup".to_string(),

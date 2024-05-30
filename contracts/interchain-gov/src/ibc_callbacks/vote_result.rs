@@ -1,6 +1,6 @@
 use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
-use cosmwasm_std::{from_json, to_json_string, DepsMut, Env, MessageInfo, QueryRequest, WasmQuery};
+use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo, QueryRequest, WasmQuery};
 
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::msg::{InterchainGovQueryMsg, QueryMsg, VoteResponse};
@@ -12,7 +12,7 @@ use crate::InterchainGovError;
 pub fn vote_result_callback(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     app: InterchainGov,
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
@@ -29,7 +29,10 @@ pub fn vote_result_callback(
             // Retrieve the prop id from the original message
             let prop_id = match query {
                 QueryRequest::Wasm(wasm) => match wasm {
-                    WasmQuery::Smart { contract_addr, msg } => {
+                    WasmQuery::Smart {
+                        contract_addr: _,
+                        msg,
+                    } => {
                         let msg: QueryMsg = from_json(msg)?;
                         match msg {
                             QueryMsg::Module(InterchainGovQueryMsg::Vote { prop_id }) => prop_id,
@@ -57,7 +60,7 @@ pub fn vote_result_callback(
                 |prev_res| -> Result<Option<GovernanceVote>, InterchainGovError> {
                     match prev_res {
                         Some(prev) => match prev {
-                            Some(prev) => Err(InterchainGovError::ExistingVoteResult {
+                            Some(_prev) => Err(InterchainGovError::ExistingVoteResult {
                                 prop_id: prop_id.clone(),
                                 chain: chain.clone(),
                             }),
@@ -78,8 +81,8 @@ pub fn vote_result_callback(
             )?;
         }
         CallbackResult::Execute {
-            initiator_msg,
-            result,
+            initiator_msg: _,
+            result: _,
         } => {
             unreachable!("vote_result Execute callback")
         }

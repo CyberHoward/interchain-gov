@@ -1,10 +1,8 @@
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::state::{PENDING_QUERIES, PENDING_REPLIES};
-use crate::InterchainGovError;
+
 use abstract_adapter::sdk::AbstractResponse;
-use cosmwasm_std::{
-    from_json, DepsMut, Env, Reply, StdError, StdResult, SubMsgResponse, SubMsgResult,
-};
+use cosmwasm_std::{from_json, DepsMut, Env, Reply, StdError, StdResult, SubMsgResult};
 use neutron_query::neutron_sdk::bindings::msg::MsgRegisterInterchainQueryResponse;
 
 pub fn icq_reply(deps: DepsMut, _env: Env, app: InterchainGov, reply: Reply) -> AdapterResult {

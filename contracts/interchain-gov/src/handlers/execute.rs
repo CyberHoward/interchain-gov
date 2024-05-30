@@ -1,20 +1,16 @@
 use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
-use abstract_adapter::sdk::{AbstractSdkResult, Execution, IbcInterface, TransferInterface};
+use abstract_adapter::sdk::{AbstractSdkResult, IbcInterface};
 use abstract_adapter::std::ibc::CallbackInfo;
 use abstract_adapter::std::AbstractResult;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
 use base64::Engine;
 use cosmwasm_std::{
-    coins, to_json_binary, CosmosMsg, DepsMut, Env, MessageInfo, Order, StdResult, Storage, SubMsg,
-    WasmQuery,
+    to_json_binary, CosmosMsg, DepsMut, Env, MessageInfo, Order, StdResult, Storage, WasmQuery,
 };
 
 use ibc_sync_state::DataState;
-use neutron_query::gov::create_gov_proposal_keys;
-use neutron_query::icq::IcqInterface;
-use neutron_query::QueryType;
 
 use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID, REGISTER_VOTE_ID};
 use crate::msg::InterchainGovQueryMsg;
@@ -22,8 +18,8 @@ use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
 use crate::state::{
     Governance, GovernanceVote, Members, Proposal, ProposalAction, ProposalId, ProposalMsg,
     ProposalOutcome, TallyResult, Vote, ALLOW_JOINING_GOV, FINALIZED_PROPOSALS, GOV_VOTE_QUERIES,
-    MEMBERS, MEMBERS_STATE_SYNC, PENDING_REPLIES, PROPOSAL_STATE_SYNC,
-    TEMP_REMOTE_GOV_MODULE_ADDRS, VOTE, VOTE_RESULTS,
+    MEMBERS, MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC, TEMP_REMOTE_GOV_MODULE_ADDRS, VOTE,
+    VOTE_RESULTS,
 };
 use crate::{
     contract::{AdapterResult, InterchainGov},
@@ -197,7 +193,7 @@ fn execute_prop(
     let ibc_client = app.ibc_client(deps.as_ref());
     let exec_msg = InterchainGovIbcMsg::ProposalResult {
         prop_hash: prop_id.clone(),
-        outcome: outcome,
+        outcome,
     };
     let mut msgs = vec![];
     let target_module = this_module(&app)?;
@@ -218,11 +214,11 @@ fn execute_prop(
             Some(callback.clone()),
         )?);
     }
-    return Ok(app
+    Ok(app
         .response("propose_members")
         .add_messages(msgs)
         .add_messages(new_member_msgs)
-        .add_attribute("prop_id", prop_id));
+        .add_attribute("prop_id", prop_id))
 }
 
 /// Reach out to external members and request their local vote results
@@ -232,7 +228,7 @@ fn request_vote_results(
     app: InterchainGov,
     prop_id: ProposalId,
 ) -> AdapterResult {
-    let (prop, state) = load_proposal(deps.storage, &prop_id)?;
+    let (prop, _state) = load_proposal(deps.storage, &prop_id)?;
 
     // We can only tally upon expiration
     if !prop.expiration.is_expired(&env.block) {
@@ -304,7 +300,7 @@ fn request_vote_results(
 /// REuest external members actual governance vote details
 fn request_gov_vote_details(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     app: InterchainGov,
     prop_id: ProposalId,
 ) -> AdapterResult {
@@ -385,9 +381,9 @@ fn request_gov_vote_details(
 }
 
 fn check_existing_votes<E: FnOnce() -> AdapterResult<()>>(
-    deps: &DepsMut,
-    prop_id: &ProposalId,
-    has_all_votes_handler: E,
+    _deps: &DepsMut,
+    _prop_id: &ProposalId,
+    _has_all_votes_handler: E,
 ) -> AdapterResult<()> {
     // First, make sure that all votes are in by checking whether we have vote results
 

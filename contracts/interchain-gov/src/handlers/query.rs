@@ -8,7 +8,7 @@ use abstract_adapter::objects::chain_name::ChainName;
 use crate::msg::{
     MembersResponse, ProposalResponse, ProposalsResponse, VoteResponse, VoteResultsResponse,
 };
-use crate::state::{GovernanceVote, ProposalId, MEMBERS, VOTE, VOTE_RESULTS};
+use crate::state::{GovernanceVote, ProposalId, VOTE, VOTE_RESULTS};
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, Order, StdResult};
 use ibc_sync_state::DataState;
 
@@ -47,7 +47,7 @@ fn query_proposals(deps: Deps, proposal_ids: Vec<String>) -> AdapterResult<Propo
         let data_state = PROPOSAL_STATE_SYNC.data_state(deps.storage, proposal_id.clone());
         proposals.push(ProposalResponse {
             prop_id: proposal_id,
-            prop: prop,
+            prop,
             state: data_state,
         })
     }
@@ -151,7 +151,11 @@ fn query_vote(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteRespon
     })
 }
 
-fn query_vote_results(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteResultsResponse> {
+fn query_vote_results(
+    deps: Deps,
+    _env: Env,
+    prop_id: ProposalId,
+) -> StdResult<VoteResultsResponse> {
     let results = VOTE_RESULTS
         .prefix(prop_id.clone())
         .range(deps.storage, None, None, Order::Ascending)

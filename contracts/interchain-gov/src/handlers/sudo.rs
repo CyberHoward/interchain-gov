@@ -1,25 +1,19 @@
 use abstract_adapter::sdk::AbstractResponse;
-use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{
-    to_json_binary, Binary, DepsMut, Env, MessageInfo, Order, StdError, StdResult, Storage, Uint128,
-};
-use cw_storage_plus::Item;
+
+use cosmwasm_std::{Binary, DepsMut, Env, StdError, Storage};
+
 use neutron_query::icq::IcqInterface;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use crate::msg::InterchainGovSudoMsg;
-use crate::state::{StorageKey, TallyResult, GOV_VOTE_QUERIES, PENDING_QUERIES};
+use crate::state::{TallyResult, GOV_VOTE_QUERIES, PENDING_QUERIES};
 use crate::{
     contract::{AdapterResult, InterchainGov},
-    msg::InterchainGovInstantiateMsg,
-    state::{Members, MEMBERS},
     InterchainGovError,
 };
 
 pub fn sudo_handler(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     app: InterchainGov,
     msg: InterchainGovSudoMsg,
 ) -> AdapterResult {
@@ -53,7 +47,7 @@ pub fn sudo_handler(
 
             // check the first proposal
             let prop = gov_props.proposals.first();
-            if let Some(prop) = prop.clone() {
+            if let Some(prop) = prop {
                 if prop.final_tally_result.is_none() {
                     return Err(StdError::generic_err("No final tally result found").into());
                 };
