@@ -33,16 +33,3 @@ dao-voting = "2.3.0"
 
 # Dependencies for interface
 cw-orch = { workspace = true }
-abstract-interface = { workspace = true }
-
-# Dependencies for bins
-clap = { workspace = true, optional = true, features = ["derive"] }
-abstract-client = { workspace = true, optional = true }
-dotenv = { workspace = true, optional = true }
-env_logger = { workspace = true, optional = true }
-
-[dev-dependencies]
-interchain-gov = { workspace = true }
-abstract-client = { workspace = true }
-abstract-adapter = { workspace = true, features = ["test-utils"] }
-speculoos = { workspace = true }

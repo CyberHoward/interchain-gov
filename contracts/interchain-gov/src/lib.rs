@@ -5,7 +5,7 @@ pub mod error;
 mod handlers;
 mod ibc_callbacks;
 pub mod msg;
-pub mod replies;
+// pub mod replies;
 pub mod state;
 
 pub use contract::interface::InterchainGovInterface;

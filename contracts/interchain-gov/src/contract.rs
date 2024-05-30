@@ -2,7 +2,7 @@ use crate::{
     error::InterchainGovError,
     handlers, ibc_callbacks,
     msg::{InterchainGovExecuteMsg, InterchainGovInstantiateMsg, InterchainGovQueryMsg},
-    replies, ADAPTER_VERSION, MY_ADAPTER_ID,
+    ADAPTER_VERSION, MY_ADAPTER_ID,
 };
 
 use crate::dependencies::IBC_CLIENT_DEP;
@@ -34,16 +34,16 @@ const INTERCHAIN_GOV: InterchainGov = InterchainGov::new(MY_ADAPTER_ID, ADAPTER_
         (REGISTER_VOTE_ID, ibc_callbacks::vote_result_callback),
     ])
     // WE need a reply for every member
-    .with_replies(&[
-        (0, replies::icq_reply),
-        (1, replies::icq_reply),
-        (2, replies::icq_reply),
-        (3, replies::icq_reply),
-        (4, replies::icq_reply),
-        (5, replies::icq_reply),
-        (6, replies::icq_reply),
-    ])
-    .with_sudo(handlers::sudo_handler)
+    // .with_replies(&[
+    //     (0, replies::icq_reply),
+    //     (1, replies::icq_reply),
+    //     (2, replies::icq_reply),
+    //     (3, replies::icq_reply),
+    //     (4, replies::icq_reply),
+    //     (5, replies::icq_reply),
+    //     (6, replies::icq_reply),
+    // ])
+    // .with_sudo(handlers::sudo_handler)
     .with_dependencies(&[IBC_CLIENT_DEP]);
 
 // Export handlers
