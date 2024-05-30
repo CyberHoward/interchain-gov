@@ -6,7 +6,10 @@ use cosmwasm_std::{from_json, DepsMut, Env};
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::msg::InterchainGovIbcMsg;
 
-use crate::state::{Vote, ALLOW_JOINING_GOV, MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
+use crate::state::{
+    Members, ProposalAction, Vote, ALLOW_JOINING_GOV, FINALIZED_PROPOSALS, MEMBERS_STATE_SYNC,
+    PROPOSAL_STATE_SYNC,
+};
 use crate::{InterchainGovError, MY_ADAPTER_ID};
 
 pub fn module_ibc_handler(
@@ -39,7 +42,7 @@ pub fn module_ibc_handler(
             let allowed_gov = ALLOW_JOINING_GOV.load(deps.storage)?;
 
             // assert that the governance members are the whitelisted members
-            if members != allowed_gov {
+            if !members.members.iter().all(|a| allowed_gov.members.contains(a)) {
                 return Err(InterchainGovError::UnauthorizedIbcMessage {});
             }
 
@@ -64,17 +67,42 @@ pub fn module_ibc_handler(
 
             // update proposal state to "proposed". Member will vote `NoVote` on the proposal by default
             PROPOSAL_STATE_SYNC.propose_kv_state(deps.storage, prop_hash, (prop, Vote::NoVote))?;
-
             Ok(app
                 .response("module_ibc")
                 .add_attribute("action", "propose"))
         }
         InterchainGovIbcMsg::FinalizeProposal { prop_hash: prop_id } => {
             PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?;
-
             Ok(app
                 .response("module_ibc")
                 .add_attribute("action", "finalize"))
+        }
+        InterchainGovIbcMsg::ProposalResult {
+            prop_hash: prop_id,
+            outcome,
+        } => {
+            let prop = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?.0;
+            // TODO: store each vote per chain
+            FINALIZED_PROPOSALS.save(
+                deps.storage,
+                prop_id.clone(),
+                &(prop.clone(), outcome.clone()),
+            )?;
+
+            // Execute the prop
+            match prop.action {
+                ProposalAction::UpdateMembers { members } => {
+                    // If new members exclude self, update members to only be self
+                    if !members.members.contains(&ChainName::new(&env)) {
+                        MEMBERS_STATE_SYNC.save_members(deps.storage, &Members::new(&env))?;
+                    }
+                    MEMBERS_STATE_SYNC.save_members(deps.storage, &members)?;
+                }
+                _ => {}
+            }
+            Ok(app
+                .response("module_ibc")
+                .add_attribute("action", "proposal_result"))
         }
         _ => Err(InterchainGovError::UnauthorizedIbcMessage {}),
     }

@@ -32,8 +32,8 @@ neutron-query = { path = "packages/neutron-query" }
 
 
 #cw-orch = { version = "0.22.2" }
-cw-orch = { package = "cw-orch-interchain", git = "ssh://git@github.com/AbstractSDK/cw-orch-interchain.git", tag = "v0.22.0" }
-#cw-orch-interchain = { version = "0.1.0" }
+cw-orch = "0.22"
+cw-orch-interchain = { version = "0.1.0" }
 const_format = "0.2.32"
 
 interchain-gov = { path = "contracts/interchain-gov" }

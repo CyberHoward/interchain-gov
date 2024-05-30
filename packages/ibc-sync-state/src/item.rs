@@ -99,7 +99,8 @@ impl ItemStateSyncController {
         &self,
         storage: &mut dyn Storage,
         key: impl Into<StorageKey>,
-    ) -> SyncStateResult<StateChange> {
+        set: bool,
+    ) -> SyncStateResult<()> {
         let key = key.into();
         // remove any of the states
         if let Some(change) = self
@@ -108,16 +109,18 @@ impl ItemStateSyncController {
         {
             self.state_status_map
                 .remove(storage, (key.clone(), DataState::Initiated.to_num()));
-            return Ok(change);
+            return Ok(());
         } else if let Some(change) = self
             .state_status_map
             .may_load(storage, (key.clone(), DataState::Proposed.to_num()))?
         {
             self.state_status_map
                 .remove(storage, (key.clone(), DataState::Proposed.to_num()));
-            return Ok(change);
-        } else {
+            return Ok(());
+        } else if !set {
             return Err(SyncStateError::NoProposedState);
+        } else {
+            Ok(())
         }
     }
 }

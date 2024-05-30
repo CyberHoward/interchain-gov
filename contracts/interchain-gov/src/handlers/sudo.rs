@@ -1,16 +1,21 @@
 use abstract_adapter::sdk::AbstractResponse;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Binary, DepsMut, Env, MessageInfo, Order, StdError, StdResult, Storage, to_json_binary, Uint128};
+use cosmwasm_std::{
+    to_json_binary, Binary, DepsMut, Env, MessageInfo, Order, StdError, StdResult, Storage, Uint128,
+};
 use cw_storage_plus::Item;
+use neutron_query::icq::IcqInterface;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use neutron_query::icq::IcqInterface;
 
-use crate::{contract::{AdapterResult, InterchainGov}, InterchainGovError, msg::InterchainGovInstantiateMsg, state::{Members, MEMBERS}};
 use crate::msg::InterchainGovSudoMsg;
-use crate::state::{GOV_VOTE_QUERIES, PENDING_QUERIES, StorageKey, TallyResult};
-
-
+use crate::state::{StorageKey, TallyResult, GOV_VOTE_QUERIES, PENDING_QUERIES};
+use crate::{
+    contract::{AdapterResult, InterchainGov},
+    msg::InterchainGovInstantiateMsg,
+    state::{Members, MEMBERS},
+    InterchainGovError,
+};
 
 pub fn sudo_handler(
     deps: DepsMut,
@@ -24,18 +29,24 @@ pub fn sudo_handler(
             let query_details = PENDING_QUERIES.load(deps.storage, query_id)?;
             PENDING_QUERIES.remove(deps.storage, query_id);
 
-            let query_res = app.neutron_icq(deps.as_ref())?.query_registered_query_result(query_id)?;
+            let query_res = app
+                .neutron_icq(deps.as_ref())?
+                .query_registered_query_result(query_id)?;
 
             // Map into the proper type
-            let retyped_kv_results = query_res.kv_results.into_iter().map(|kv| {
-                let key = kv.key;
-                let value = kv.value;
-                neutron_query::neutron_sdk::bindings::types::StorageValue {
-                    storage_prefix: kv.storage_prefix,
-                    key: Binary(key),
-                    value: Binary(value),
-                }
-            }).collect::<Vec<_>>();
+            let retyped_kv_results = query_res
+                .kv_results
+                .into_iter()
+                .map(|kv| {
+                    let key = kv.key;
+                    let value = kv.value;
+                    neutron_query::neutron_sdk::bindings::types::StorageValue {
+                        storage_prefix: kv.storage_prefix,
+                        key: Binary(key),
+                        value: Binary(value),
+                    }
+                })
+                .collect::<Vec<_>>();
 
             let gov_props: neutron_query::neutron_sdk::interchain_queries::v045::types::GovernmentProposal =
                 neutron_query::neutron_sdk::interchain_queries::types::KVReconstruct::reconstruct(retyped_kv_results.as_slice()).map_err(|e| InterchainGovError::Std(StdError::generic_err(e.to_string())))?;
@@ -56,7 +67,11 @@ pub fn sudo_handler(
                     no_with_veto: tally_result.no_with_veto,
                 };
 
-                GOV_VOTE_QUERIES.save(deps.storage, (query_details.1.clone(), &query_details.0), &Some(tally))?;
+                GOV_VOTE_QUERIES.save(
+                    deps.storage,
+                    (query_details.1.clone(), &query_details.0),
+                    &Some(tally),
+                )?;
             } else {
                 unimplemented!("No proposals found")
             }

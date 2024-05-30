@@ -1,6 +1,6 @@
 use crate::{
     contract::InterchainGov,
-    state::{Members},
+    state::{Members, ProposalOutcome},
 };
 
 use abstract_adapter::objects::chain_name::ChainName;
@@ -8,7 +8,11 @@ use cosmwasm_schema::QueryResponses;
 use ibc_sync_state::{DataState, StateChange};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
-abstract_adapter::adapter_msg_types!(InterchainGov, InterchainGovExecuteMsg, InterchainGovQueryMsg);
+abstract_adapter::adapter_msg_types!(
+    InterchainGov,
+    InterchainGovExecuteMsg,
+    InterchainGovQueryMsg
+);
 use crate::state::{Governance, GovernanceVote, Proposal, ProposalId, ProposalMsg, Vote};
 
 /// App instantiate message
@@ -46,7 +50,7 @@ pub enum InterchainGovExecuteMsg {
         prop_id: String,
     },
     RequestGovVoteDetails {
-        prop_id: String
+        prop_id: String,
     },
     SetAcceptGovInvite {
         /// only accept invites for groups with these members
@@ -56,10 +60,10 @@ pub enum InterchainGovExecuteMsg {
         prop_id: String,
     },
     TestAddMembers {
-        members: Members
+        members: Members,
     },
     TemporaryRegisterRemoteGovModuleAddrs {
-        modules: Vec<(ChainName, String)>
+        modules: Vec<(ChainName, String)>,
     },
 }
 
@@ -82,6 +86,11 @@ pub enum InterchainGovIbcMsg {
     FinalizeProposal {
         prop_hash: String,
     },
+    /// Sends the proposal results to the other chains.
+    ProposalResult {
+        prop_hash: String,
+        outcome: ProposalOutcome,
+    },
 }
 
 #[non_exhaustive]
@@ -95,6 +104,10 @@ pub enum InterchainGovIbcCallbackMsg {
         proposed_to: ChainName,
     },
     ProposeProposal {
+        prop_hash: String,
+        proposed_to: ChainName,
+    },
+    ProposalResult {
         prop_hash: String,
         proposed_to: ChainName,
     },
@@ -130,21 +143,15 @@ pub enum InterchainGovQueryMsg {
     },
 
     #[returns(VoteResultsResponse)]
-    VoteResults {
-        prop_id: ProposalId,
-    },
-
+    VoteResults { prop_id: ProposalId },
 }
 
 /// App sudo messages
 #[cosmwasm_schema::cw_serde]
 pub enum InterchainGovSudoMsg {
     #[serde(rename = "kv_query_result")]
-    KVQueryResult {
-        query_id: u64,
-    }
+    KVQueryResult { query_id: u64 },
 }
-
 
 #[cosmwasm_schema::cw_serde]
 pub struct ConfigResponse {}
@@ -191,5 +198,5 @@ pub struct VoteResponse {
 #[cosmwasm_schema::cw_serde]
 pub struct VoteResultsResponse {
     pub prop_id: ProposalId,
-    pub results: Vec<(ChainName, Option<GovernanceVote>)>
+    pub results: Vec<(ChainName, Option<GovernanceVote>)>,
 }

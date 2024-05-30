@@ -1,7 +1,7 @@
 use cosmwasm_schema::cw_serde;
 
-pub mod icq;
 pub mod gov;
+pub mod icq;
 
 pub use neutron_sdk;
 

@@ -1,4 +1,3 @@
 mod icq;
 
-
-pub use self::{icq::icq_reply};
+pub use self::icq::icq_reply;

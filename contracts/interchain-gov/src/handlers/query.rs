@@ -1,12 +1,14 @@
-use abstract_adapter::objects::chain_name::ChainName;
 use crate::{
     contract::{AdapterResult, InterchainGov},
     msg::{ConfigResponse, InterchainGovQueryMsg, MapState, ProposalStateResponse},
-    state::PROPOSAL_STATE_SYNC,
+    state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC},
 };
+use abstract_adapter::objects::chain_name::ChainName;
 
-use crate::msg::{MembersResponse, ProposalResponse, ProposalsResponse, VoteResponse, VoteResultsResponse};
-use crate::state::{GovernanceVote, MEMBERS, ProposalId, VOTE, VOTE_RESULTS};
+use crate::msg::{
+    MembersResponse, ProposalResponse, ProposalsResponse, VoteResponse, VoteResultsResponse,
+};
+use crate::state::{GovernanceVote, ProposalId, MEMBERS, VOTE, VOTE_RESULTS};
 use cosmwasm_std::{to_json_binary, Binary, Deps, Env, Order, StdResult};
 use ibc_sync_state::DataState;
 
@@ -19,9 +21,13 @@ pub fn query_handler(
     match msg {
         InterchainGovQueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         InterchainGovQueryMsg::Members {} => to_json_binary(&query_members(deps)?),
-        InterchainGovQueryMsg::Proposal { prop_id } => to_json_binary(&query_proposal(deps, prop_id)?),
+        InterchainGovQueryMsg::Proposal { prop_id } => {
+            to_json_binary(&query_proposal(deps, prop_id)?)
+        }
         InterchainGovQueryMsg::Vote { prop_id } => to_json_binary(&query_vote(deps, env, prop_id)?),
-        InterchainGovQueryMsg::VoteResults { prop_id } => to_json_binary(&query_vote_results(deps, env, prop_id)?),
+        InterchainGovQueryMsg::VoteResults { prop_id } => {
+            to_json_binary(&query_vote_results(deps, env, prop_id)?)
+        }
         InterchainGovQueryMsg::ListProposalStates {} => to_json_binary(&query_props_state(deps)?),
         InterchainGovQueryMsg::Proposals { proposal_ids } => {
             to_json_binary(&query_proposals(deps, proposal_ids)?)
@@ -125,8 +131,8 @@ fn query_proposal(deps: Deps, prop_id: ProposalId) -> AdapterResult<ProposalResp
 }
 
 fn query_members(deps: Deps) -> AdapterResult<MembersResponse> {
-    let members = MEMBERS.load(deps.storage)?;
-    // TODO: fix
+    let members = MEMBERS_STATE_SYNC.load_members(deps.storage)?;
+
     Ok(MembersResponse { members })
 }
 
@@ -135,24 +141,21 @@ fn query_config(_deps: Deps) -> AdapterResult<ConfigResponse> {
 }
 
 fn query_vote(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteResponse> {
-    let GovernanceVote {
-        vote,
-        governance
-    } = VOTE.load(deps.storage, prop_id.clone())?;
+    let GovernanceVote { vote, governance } = VOTE.load(deps.storage, prop_id.clone())?;
 
     Ok(VoteResponse {
         vote,
         governance,
         prop_id,
-        chain: ChainName::new(&env)
+        chain: ChainName::new(&env),
     })
 }
 
 fn query_vote_results(deps: Deps, env: Env, prop_id: ProposalId) -> StdResult<VoteResultsResponse> {
-    let results = VOTE_RESULTS.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
+    let results = VOTE_RESULTS
+        .prefix(prop_id.clone())
+        .range(deps.storage, None, None, Order::Ascending)
+        .collect::<StdResult<Vec<(ChainName, Option<GovernanceVote>)>>>()?;
 
-    Ok(crate::msg::VoteResultsResponse {
-        prop_id,
-        results
-    })
+    Ok(crate::msg::VoteResultsResponse { prop_id, results })
 }

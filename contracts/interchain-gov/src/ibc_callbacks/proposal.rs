@@ -23,12 +23,14 @@ pub fn proposal_callback(
             result: CallbackResult::Execute { result: Ok(_), .. },
         } => {
             let callback_msg: InterchainGovIbcCallbackMsg = from_json(callback_msg)?;
+            println!("Decoded callback: {:?}", callback_msg);
+
             match callback_msg {
                 InterchainGovIbcCallbackMsg::JoinGov { proposed_to } => {
                     MEMBERS_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
+                    // finalize my proposal
 
                     if !MEMBERS_STATE_SYNC.has_outstanding_acks(deps.storage)? {
-                        // finalize my proposal
                         MEMBERS_STATE_SYNC.finalize_members(deps.storage, None)?;
                     }
                 }
@@ -49,6 +51,12 @@ pub fn proposal_callback(
                         // TODO: re-enable after testing
                         // return finalize(deps, env, info, app, prop_id);
                     }
+                }
+                InterchainGovIbcCallbackMsg::ProposalResult {
+                    prop_hash: _,
+                    proposed_to,
+                } => {
+                    PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
                 }
                 _ => unimplemented!(),
             }

@@ -1,20 +1,15 @@
 //! # Neutron Interchain Query (ICQ)
+use crate::{QueryType, ICQ_PROTOCOL};
 use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::UncheckedChannelEntry;
 use abstract_adapter::std::AbstractError;
-use abstract_sdk::{AbstractSdkError, AbstractSdkResult, TransferInterface};
 use abstract_sdk::features::AccountIdentification;
-use cosmos_anybuf::{
-    interfaces::InterChainQueries,
-    neutron::Neutron
-
-    ,
-};
+use abstract_sdk::{AbstractSdkError, AbstractSdkResult, TransferInterface};
 use cosmos_anybuf::interfaces::TransactionFilterItem;
 use cosmos_anybuf::types::neutron::interchainqueries::{KVKey, QueryResult, RegisteredQuery};
+use cosmos_anybuf::{interfaces::InterChainQueries, neutron::Neutron};
 use cosmwasm_schema::schemars::_serde_json::to_string;
 use cosmwasm_std::{Addr, CosmosMsg, Deps, StdError};
-use crate::{ICQ_PROTOCOL, QueryType};
 
 /// An interface to the Neutron Interchain Query Module
 pub trait IcqInterface: AccountIdentification + TransferInterface {
@@ -35,10 +30,7 @@ pub trait IcqInterface: AccountIdentification + TransferInterface {
         &'a self,
         deps: cosmwasm_std::Deps<'a>,
     ) -> AbstractSdkResult<NeutronIcq<Self>> {
-        Ok(NeutronIcq {
-            base: self,
-            deps,
-        })
+        Ok(NeutronIcq { base: self, deps })
     }
 }
 
@@ -59,7 +51,6 @@ impl<T> IcqInterface for T where T: AccountIdentification + TransferInterface {}
 //     }
 // }
 
-
 /// This struct provides methods to grant fee allowances and interact with the feegrant module.
 ///
 /// # Example
@@ -79,12 +70,14 @@ pub struct NeutronIcq<'a, T: AccountIdentification + TransferInterface> {
 }
 
 impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
-
-    pub fn connection_id(
-        &self,
-        chain: ChainName
-    ) -> AbstractSdkResult<String> {
-        self.base.ans_host(self.deps)?.query_channel(&self.deps.querier, &UncheckedChannelEntry::new(chain.as_str(), ICQ_PROTOCOL).check()?).map_err(|e| AbstractSdkError::Abstract(AbstractError::AnsHostError(e)))
+    pub fn connection_id(&self, chain: ChainName) -> AbstractSdkResult<String> {
+        self.base
+            .ans_host(self.deps)?
+            .query_channel(
+                &self.deps.querier,
+                &UncheckedChannelEntry::new(chain.as_str(), ICQ_PROTOCOL).check()?,
+            )
+            .map_err(|e| AbstractSdkError::Abstract(AbstractError::AnsHostError(e)))
     }
 
     pub fn register_interchain_query(
@@ -93,13 +86,19 @@ impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
         chain: ChainName,
         query_type: QueryType,
         keys: Vec<KVKey>,
-        transactions_filter: Vec<TransactionFilterItem> ,
+        transactions_filter: Vec<TransactionFilterItem>,
         update_period: u64,
     ) -> AbstractSdkResult<CosmosMsg> {
         let connection_id = self.connection_id(chain)?;
 
-        let register_msg = Neutron::register_interchain_query(sender, query_type.to_string(), keys, to_string(&transactions_filter)
-            .map_err(|e| StdError::generic_err(e.to_string()))?, connection_id, update_period);
+        let register_msg = Neutron::register_interchain_query(
+            sender,
+            query_type.to_string(),
+            keys,
+            to_string(&transactions_filter).map_err(|e| StdError::generic_err(e.to_string()))?,
+            connection_id,
+            update_period,
+        );
 
         Ok(register_msg)
     }
@@ -109,22 +108,19 @@ impl<'a, T: AccountIdentification + TransferInterface> NeutronIcq<'a, T> {
     /// # Arguments
     ///
     /// * `query_id` - The id of the query
-    pub fn remove_interchain_query(&self, sender: &Addr, query_id: u64) -> AbstractSdkResult<CosmosMsg> {
+    pub fn remove_interchain_query(
+        &self,
+        sender: &Addr,
+        query_id: u64,
+    ) -> AbstractSdkResult<CosmosMsg> {
         Ok(Neutron::remove_interchain_query(sender, query_id))
     }
 
-
-    pub fn query_registered_query(
-        &self,
-        query_id: u64,
-    ) -> AbstractSdkResult<RegisteredQuery> {
+    pub fn query_registered_query(&self, query_id: u64) -> AbstractSdkResult<RegisteredQuery> {
         Ok(Neutron::query_registered_query(&self.deps.querier, query_id)?.registered_query)
     }
 
-    pub fn query_registered_query_result(
-        &self,
-        query_id: u64
-    ) -> AbstractSdkResult<QueryResult> {
+    pub fn query_registered_query_result(&self, query_id: u64) -> AbstractSdkResult<QueryResult> {
         Ok(Neutron::query_registered_query_result(&self.deps.querier, query_id)?.result)
     }
 }
