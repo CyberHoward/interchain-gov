@@ -1,6 +1,6 @@
 use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
-use cosmwasm_std::{DepsMut, Env, from_json, MessageInfo, QueryRequest, WasmQuery};
+use cosmwasm_std::{DepsMut, Env, from_json, MessageInfo, QueryRequest, to_json_string, WasmQuery};
 
 use crate::contract::{AdapterResult, InterchainGov};
 use crate::InterchainGovError;
@@ -24,7 +24,7 @@ pub fn vote_result_callback(
             println!("Query result");
             if result.is_err() {
                 println!("Query error");
-                return Err(InterchainGovError::IbcFailed(ibc_msg.clone()));
+                return Err(InterchainGovError::IbcFailed("failed".to_string()));
             }
 
             // Retrieve the prop id from the original message
@@ -87,9 +87,9 @@ pub fn vote_result_callback(
         CallbackResult::Execute { initiator_msg, result } => {
             unreachable!("vote_result Execute callback")
         },
-        CallbackResult::FatalError(_) => {
+        CallbackResult::FatalError(e) => {
             println!("Fatal error");
-            return Err(InterchainGovError::IbcFailed(ibc_msg));
+            return Err(InterchainGovError::IbcFailed(e));
         }
     }
 

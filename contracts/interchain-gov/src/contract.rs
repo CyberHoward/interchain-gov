@@ -6,6 +6,7 @@ use crate::dependencies::IBC_CLIENT_DEP;
 use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID, FINALIZE_CALLBACK_ID};
 use crate::msg::InterchainGovSudoMsg;
 
+
 /// The type of the adapter that is used to build your Adapter and access the Abstract SDK features.
 pub type InterchainGov = AdapterContract<
     InterchainGovError,

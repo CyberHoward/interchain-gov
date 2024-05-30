@@ -1,13 +1,13 @@
 pub mod api;
 pub mod contract;
+mod dependencies;
 pub mod error;
 mod handlers;
+mod ibc_callbacks;
 pub mod msg;
 pub mod state;
-mod dependencies;
-mod ibc_callbacks;
-pub mod data_state;
 pub mod replies;
+
 
 pub use contract::interface::InterchainGovInterface;
 pub use error::InterchainGovError;

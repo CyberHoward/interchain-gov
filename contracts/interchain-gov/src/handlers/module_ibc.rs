@@ -3,13 +3,12 @@ use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::ModuleIbcMsg;
 use cosmwasm_std::{from_json, DepsMut, Env};
 
-use crate::{InterchainGovError, MY_ADAPTER_ID};
 use crate::contract::{AdapterResult, InterchainGov};
-use crate::data_state::DataState;
 use crate::msg::InterchainGovIbcMsg;
-use crate::state::{Proposal, PROPOSALS};
 
-/// TODO
+use crate::state::{Vote, ALLOW_JOINING_GOV, MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
+use crate::{InterchainGovError, MY_ADAPTER_ID};
+
 pub fn module_ibc_handler(
     deps: DepsMut,
     env: Env,
@@ -18,15 +17,13 @@ pub fn module_ibc_handler(
 ) -> AdapterResult {
     println!("module_ibc_handler 1 : {:?}", ibc_msg);
 
-    // First check that we received the message from the server
+    // First check that we received the message from the gov contract
     if ibc_msg.source_module.id().ne(MY_ADAPTER_ID) {
         println!("UnauthorizedIbcModule: {:?}", ibc_msg.source_module.clone());
         return Err(InterchainGovError::UnauthorizedIbcModule(
             ibc_msg.source_module.clone(),
         ));
     };
-
-    // check that the sender
 
     let ibc_msg: InterchainGovIbcMsg = from_json(&ibc_msg.msg)?;
 
@@ -35,28 +32,28 @@ pub fn module_ibc_handler(
     let our_chain = ChainName::new(&env);
 
     match ibc_msg {
-        InterchainGovIbcMsg::ProposeProposal { prop_hash, prop, chain } => {
-            // check that we were supposed to receive the message
-            if chain != our_chain {
-                return Err(InterchainGovError::WrongChain {
-                    expected: our_chain,
-                    actual: chain,
-                });
+        InterchainGovIbcMsg::JoinGov { members } => {
+            // Check that the data has been finalized before.
+            MEMBERS_STATE_SYNC.assert_finalized(deps.storage)?;
+
+            let allowed_gov = ALLOW_JOINING_GOV.load(deps.storage)?;
+
+            // assert that the governance members are the whitelisted members
+            if members != allowed_gov {
+                return Err(InterchainGovError::UnauthorizedIbcMessage {});
             }
-            // check that the proposal is not already existing
-            PROPOSALS.update(deps.storage, prop_hash.clone(), |prev_prop| -> Result<(Proposal, DataState), InterchainGovError> {
-                match prev_prop {
-                    None => {
-                        Ok((prop, DataState::Initiated))
-                    }
-                    Some(_) => {
-                        Err(InterchainGovError::ProposalAlreadyExists(prop_hash))
-                    }
-                }
-            })?;
-            Ok(app.response("module_ibc").add_attribute("action", "propose"))
+
+            // We just finalize this whenever we receive the proposal from a group we want to join
+            // This means we don't have to handle a Finalize vote here.
+            MEMBERS_STATE_SYNC.finalize_members(deps.storage, Some(members))?;
+
+            Ok(app.response("module_ibc"))
         }
-        InterchainGovIbcMsg::FinalizeProposal { prop_hash: prop_id, chain } => {
+        InterchainGovIbcMsg::ProposeProposal {
+            prop_hash,
+            prop,
+            chain,
+        } => {
             // check that we were supposed to receive the message
             if chain != our_chain {
                 return Err(InterchainGovError::WrongChain {
@@ -65,32 +62,19 @@ pub fn module_ibc_handler(
                 });
             }
 
-            // check that the proposal is not already existing
-            PROPOSALS.update(deps.storage, prop_id.clone(), |prev_prop| -> Result<(Proposal, DataState), InterchainGovError> {
-                match prev_prop {
-                    None => {
-                        Err(InterchainGovError::InvalidProposalState {
-                            prop_id,
-                            expected: Some(DataState::Initiated),
-                            actual: None,
-                            chain: our_chain.clone()
-                        })
-                    }
-                    Some((_prop, state)) => {
-                       if !state.is_initiated() {
-                            return Err(InterchainGovError::InvalidProposalState {
-                                prop_id,
-                                expected: Some(DataState::Initiated),
-                                actual: Some(state),
-                                chain: our_chain.clone()
-                            });
-                        }
-                        Ok((_prop, DataState::Finalized))
-                    }
-                }
-            })?;
+            // update proposal state to "proposed". Member will vote `NoVote` on the proposal by default
+            PROPOSAL_STATE_SYNC.propose_kv_state(deps.storage, prop_hash, (prop, Vote::NoVote))?;
 
-            Ok(app.response("module_ibc").add_attribute("action", "finalize"))
+            Ok(app
+                .response("module_ibc")
+                .add_attribute("action", "propose"))
+        }
+        InterchainGovIbcMsg::FinalizeProposal { prop_hash: prop_id } => {
+            PROPOSAL_STATE_SYNC.finalize_kv_state(deps.storage, prop_id, None)?;
+
+            Ok(app
+                .response("module_ibc")
+                .add_attribute("action", "finalize"))
         }
         _ => Err(InterchainGovError::UnauthorizedIbcMessage {}),
     }

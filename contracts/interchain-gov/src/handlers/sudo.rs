@@ -8,7 +8,7 @@ use neutron_query::icq::IcqInterface;
 
 use crate::{contract::{AdapterResult, InterchainGov}, InterchainGovError, msg::InterchainGovInstantiateMsg, state::{Members, MEMBERS}};
 use crate::msg::InterchainGovSudoMsg;
-use crate::state::{DataState, GOV_VOTE_QUERIES, ITEMS_DATA_STATE, PENDING_QUERIES, StateChange, StorageKey, TallyResult};
+use crate::state::{GOV_VOTE_QUERIES, PENDING_QUERIES, StorageKey, TallyResult};
 
 
 

@@ -55,7 +55,10 @@ impl<'a, T: InterchainGovApi> InterchainGov<'a, T> {
 /// Queries
 impl<'a, T: InterchainGovApi> InterchainGov<'a, T> {
     /// Query your adapter via message type
-    pub fn query<R: DeserializeOwned>(&self, query_msg: InterchainGovQueryMsg) -> AbstractSdkResult<R> {
+    pub fn query<R: DeserializeOwned>(
+        &self,
+        query_msg: InterchainGovQueryMsg,
+    ) -> AbstractSdkResult<R> {
         let adapters = self.base.adapters(self.deps);
         adapters.query(self.module_id(), query_msg)
     }

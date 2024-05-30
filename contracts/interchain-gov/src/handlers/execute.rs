@@ -1,13 +1,14 @@
 use abstract_adapter::objects::chain_name::ChainName;
 use abstract_adapter::objects::module::ModuleInfo;
 use abstract_adapter::sdk::{AbstractSdkResult, Execution, IbcInterface, TransferInterface};
-use abstract_adapter::sdk::base::{ModuleIbcEndpoint};
 use abstract_adapter::std::AbstractResult;
 use abstract_adapter::std::ibc::CallbackInfo;
-use abstract_adapter::std::ibc_client::state::IBC_INFRA;
 use abstract_adapter::traits::AbstractResponse;
 use abstract_adapter::traits::ModuleIdentification;
-use cosmwasm_std::{Binary, coins, CosmosMsg, DepsMut, ensure_eq, Env, MessageInfo, Order, StdResult, Storage, SubMsg, to_json_binary, to_json_string, WasmQuery};
+use base64::Engine;
+use cosmwasm_std::{coins, CosmosMsg, DepsMut, Env, MessageInfo, Order, StdResult, Storage, SubMsg, to_json_binary, WasmQuery};
+
+use ibc_sync_state::DataState;
 use neutron_query::gov::create_gov_proposal_keys;
 use neutron_query::icq::IcqInterface;
 use neutron_query::QueryType;
@@ -17,10 +18,23 @@ use crate::{
     InterchainGovError,
     msg::InterchainGovExecuteMsg,
 };
-use crate::handlers::instantiate::{get_item_state, propose_item_state};
-use crate::ibc_callbacks::{REGISTER_VOTE_ID, PROPOSE_CALLBACK_ID, FINALIZE_CALLBACK_ID};
-use crate::msg::{InterchainGovIbcMsg, InterchainGovQueryMsg};
-use crate::state::{DataState, VOTE, MEMBERS, Proposal, REMOTE_PROPOSAL_STATE, ProposalId, ProposalMsg, PROPOSALS, Vote, Members, Governance, TEMP_REMOTE_GOV_MODULE_ADDRS, GovernanceVote, VOTE_RESULTS, GOV_VOTE_QUERIES, PENDING_REPLIES, TallyResult};
+use crate::ibc_callbacks::{FINALIZE_CALLBACK_ID, PROPOSE_CALLBACK_ID, REGISTER_VOTE_ID};
+use crate::msg::{InterchainGovIbcCallbackMsg, InterchainGovIbcMsg};
+use crate::msg::InterchainGovQueryMsg;
+use crate::state::{GOV_VOTE_QUERIES, Governance, GovernanceVote, MEMBERS, Members, MEMBERS_STATE_SYNC, PENDING_REPLIES, Proposal, PROPOSAL_STATE_SYNC, ProposalAction, ProposalId, ProposalMsg, TallyResult, TEMP_REMOTE_GOV_MODULE_ADDRS, VOTE, Vote, VOTE_RESULTS};
+
+// fn tally(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String) -> AdapterResult {
+//     let (prop, _state) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?;
+//
+//     if !prop.expiration.is_expired(&env.block) {
+//         return Err(InterchainGovError::ProposalStillOpen(prop_id.clone()));
+//     }
+//
+//     // let external_members = load_external_members(deps.storage, &env)?;
+//     Ok(app
+//         .response("tally_proposal")
+//         .add_attribute("prop_id", prop_id))
+// }
 
 pub fn execute_handler(
     deps: DepsMut,
@@ -32,7 +46,6 @@ pub fn execute_handler(
     match msg {
         InterchainGovExecuteMsg::Propose { proposal } => propose(deps, env, info, adapter, proposal),
         InterchainGovExecuteMsg::Finalize { prop_id } => finalize(deps, env, info, adapter, prop_id),
-        InterchainGovExecuteMsg::InviteMember { member } => invite_member(deps, adapter, member),
         InterchainGovExecuteMsg::VoteProposal { prop_id, vote, governance } => do_vote(deps, env, adapter, prop_id, vote, governance),
         InterchainGovExecuteMsg::RequestVoteResults { prop_id } => request_vote_results(deps, env, adapter, prop_id),
         InterchainGovExecuteMsg::RequestGovVoteDetails { prop_id } => request_gov_vote_details(deps, env, adapter, prop_id),
@@ -169,35 +182,46 @@ fn check_existing_votes<E: FnOnce() -> AdapterResult<()>>(deps: &DepsMut, prop_i
     Ok(())
 }
 
-fn load_proposal(storage: &mut dyn Storage, prop_id: &String) -> Result<(Proposal, DataState), InterchainGovError> {
-    PROPOSALS.load(storage, prop_id.clone()).map_err(|_| InterchainGovError::ProposalNotFound(prop_id.clone()))
+fn load_proposal(storage: &mut dyn Storage, prop_id: &String) -> Result<(Proposal, Option<DataState>), InterchainGovError> {
+    let (prop, _vote) = PROPOSAL_STATE_SYNC.load(storage, prop_id.clone()).map_err(|_| InterchainGovError::ProposalNotFound(prop_id.clone()))?;
+    let data_state = PROPOSAL_STATE_SYNC.data_state(storage, prop_id.clone());
+    Ok((prop, data_state))
 }
 
 // This currently allows for overriding votes
 fn do_vote(deps: DepsMut, env: Env, app: InterchainGov, prop_id: String, vote: Vote, governance: Governance) -> AdapterResult {
     println!("Voting on proposal: {:?} with vote: {:?}", prop_id, vote);
-    let (prop, state) = load_proposal(deps.storage, &prop_id)?;
+    PROPOSAL_STATE_SYNC.assert_finalized(deps.storage, prop_id.clone())?;
 
-    state.expect_or(DataState::Finalized, |actual| InterchainGovError::InvalidProposalState {
-        prop_id: prop_id.clone(),
-        chain: ChainName::new(&env),
-        expected: Some(DataState::Finalized),
-        actual: Some(actual),
-    })?;
-
+    let (prop, _) = PROPOSAL_STATE_SYNC.load(deps.storage, prop_id.clone())?;
     if prop.expiration.is_expired(&env.block) {
         return Err(InterchainGovError::ProposalExpired(prop_id.clone()));
     }
 
-    // TODO: check governance?
-    VOTE.save(deps.storage, prop_id.clone(), &GovernanceVote::new(governance, vote))?;
+    /*
 
-    Ok(app.response("vote_proposal").add_attribute("prop_id", prop_id))
+    // TODO: THIS HARD_CODES A COSMOS SDK VOTE RESULT HERE, PROBABLY SHOULD INCLUDE IN PROPOSE?
+    VOTE.save(deps.storage, prop_id.clone(), &GovernanceVote::new(Governance::CosmosSDK {
+        proposal_id: 0,
+    }, Vote::Yes))?;
+     */
+
+    // TODO: check governance?
+    VOTE.save(deps.storage, prop_id.clone(), &GovernanceVote::new(governance, vote.clone()))?;
+    PROPOSAL_STATE_SYNC.finalize_kv_state(
+        deps.storage,
+        prop_id.clone(),
+        Some((prop, vote)),
+    )?;
+    
+    Ok(app
+        .response("vote_proposal")
+        .add_attribute("prop_id", prop_id))
 }
 
-fn test_add_members(deps: DepsMut, app: InterchainGov, members: Vec<ChainName>) -> AdapterResult {
+fn test_add_members(deps: DepsMut, app: InterchainGov, members: Members) -> AdapterResult {
     MEMBERS.update(deps.storage, |mut m| -> StdResult<Members> {
-        m.members.extend(members);
+        m = members;
         Ok(m)
     })?;
 
@@ -217,47 +241,106 @@ fn propose(
     proposal: ProposalMsg,
 ) -> AdapterResult {
     // 1.
-    let hash = <sha2::Sha256 as sha2::Digest>::digest(to_json_string(&proposal)?);
-    let prop_id: ProposalId = format!("{:?}", hash);
-    let prop = Proposal::new(proposal, &info.sender, &env);
+    let hash = <sha2::Sha256 as sha2::Digest>::digest(proposal.to_string());
+    let prop_id = base64::prelude::BASE64_STANDARD.encode(hash.as_slice());
+    let prop = Proposal::new(proposal.clone(), &info.sender, &env);
+
     // check that prop doesn't exist
-    let existing_prop = PROPOSALS.may_load(deps.storage, prop_id.clone())?;
-    if existing_prop.is_some() {
+    if PROPOSAL_STATE_SYNC.has(deps.storage, prop_id.clone()) {
         return Err(InterchainGovError::ProposalAlreadyExists(prop_id));
     }
 
-    let external_members = load_external_members(deps.storage, &env)?;
-    if external_members.is_empty() {
+    let external_members = MEMBERS_STATE_SYNC.external_members(deps.storage, &env)?;
+
+    if external_members.members.is_empty() {
         // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
-        PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Finalized))?;
-        return Ok(app.response("propose").add_attribute("prop_id", prop_id))
+        PROPOSAL_STATE_SYNC.finalize_kv_state(
+            deps.storage,
+            prop_id.clone(),
+            Some((prop.clone(), Vote::Yes)),
+        )?;
+        match prop.action {
+            // If goal is to update members, send an IBC packet to members to update their state
+            ProposalAction::UpdateMembers { members } => {
+                MEMBERS_STATE_SYNC.initiate_members(deps.storage, &env, members.clone())?;
+                // send msgs to new members
+
+                let ibc_client = app.ibc_client(deps.as_ref());
+                let exec_msg = InterchainGovIbcMsg::JoinGov {
+                    members: members.clone(),
+                };
+
+                let mut msgs = vec![];
+                let target_module = this_module(&app)?;
+                for host in external_members.members.iter() {
+                    let callback = CallbackInfo::new(
+                        PROPOSE_CALLBACK_ID,
+                        Some(to_json_binary(&InterchainGovIbcCallbackMsg::JoinGov {
+                            proposed_to: host.clone(),
+                        })?),
+                    );
+                    msgs.push(ibc_client.module_ibc_action(
+                        host.to_string(),
+                        target_module.clone(),
+                        &exec_msg,
+                        Some(callback.clone()),
+                    )?);
+                }
+                return Ok(app
+                    .response("propose_members")
+                    .add_messages(msgs)
+                    .add_attribute("prop_id", prop_id));
+            }
+            ProposalAction::Signal => {
+                return Ok(app
+                    .response("propose_and_accept")
+                    .add_attribute("prop_id", prop_id))
+            }
+        }
     };
 
-    // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
-    PROPOSALS.save(deps.storage, prop_id.clone(), &(prop.clone(), DataState::Initiated))?;
+    // Here we have to account for all other instances of the app.
 
     // 2.
-    // TODO: THIS HARD_CODES A COSMOS SDK VOTE RESULT HERE, PROBABLY SHOULD INCLUDE IN PROPOSE?
-    VOTE.save(deps.storage, prop_id.clone(), &GovernanceVote::new(Governance::CosmosSDK {
-        proposal_id: 0,
-    }, Vote::Yes))?;
+    // We have initiate state for the proposal, it will be proposed when we send it to other chains and get all confirmations
+    PROPOSAL_STATE_SYNC.initiate_kv_state(
+        deps.storage,
+        prop_id.clone(),
+        (prop.clone(), Vote::Yes),
+        external_members.members.clone(),
+    )?;
 
     // 3.
     let target_module = this_module(&app)?;
-    let callback = CallbackInfo::new(PROPOSE_CALLBACK_ID, None);
+
     // Loop through members and propose to them the proposal (TODO: do we actually need ourselves stored)?
-
-    let propose_msgs = external_members.iter().map(|host| {
-        let ibc_client = app.ibc_client(deps.as_ref());
-        let msg = ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::ProposeProposal {
-            prop: prop.clone(),
-            prop_hash: prop_id.clone(),
-            chain: host.clone(),
-        }, Some(callback.clone()))?;
-
-        REMOTE_PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host), &DataState::Initiated)?;
-        Ok(msg)
-    }).collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
+    let propose_msgs = external_members
+        .members
+        .iter()
+        .map(|host| {
+            let callback = CallbackInfo::new(
+                PROPOSE_CALLBACK_ID,
+                Some(to_json_binary(
+                    &InterchainGovIbcCallbackMsg::ProposeProposal {
+                        prop_hash: prop_id.clone(),
+                        proposed_to: host.clone(),
+                    },
+                )?),
+            );
+            let ibc_client = app.ibc_client(deps.as_ref());
+            let msg = ibc_client.module_ibc_action(
+                host.to_string(),
+                target_module.clone(),
+                &InterchainGovIbcMsg::ProposeProposal {
+                    prop: prop.clone(),
+                    prop_hash: prop_id.clone(),
+                    chain: host.clone(),
+                },
+                Some(callback.clone()),
+            )?;
+            Ok(msg)
+        })
+        .collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
 
     Ok(app.response("propose").add_attribute("prop_id", prop_id).add_messages(propose_msgs))
 }
@@ -268,101 +351,56 @@ fn load_external_members(storage: &mut dyn Storage, env: &Env) -> AdapterResult<
 }
 
 /// Send finalization message over IBC
-fn finalize(deps: DepsMut, env: Env, info: MessageInfo, app: InterchainGov, prop_id: ProposalId) -> AdapterResult {
-    // check whether it exists
-    let (prop, local_prop_state) = load_proposal(deps.storage, &prop_id)?;
-
-    // The state must be initiated locally (OR we could make it proposed on the final callback?)
-    if !local_prop_state.is_proposed() {
-        return Err(InterchainGovError::InvalidProposalState {
-            prop_id: prop_id.clone(),
-            chain: ChainName::new(&env),
-            expected: Some(DataState::Proposed),
-            actual: Some(local_prop_state),
-        });
-    }
-
-    // ensure that all remote chains have no state
-    let mut prop_states = REMOTE_PROPOSAL_STATE.prefix(prop_id.clone()).range(deps.storage, None, None, Order::Ascending).take(1).collect::<StdResult<Vec<(ChainName, DataState)>>>()?;
-    if let Some((chain, state)) = prop_states.pop() {
-        return Err(InterchainGovError::InvalidProposalState {
-            prop_id: prop_id.clone(),
-            chain,
-            expected: Some(DataState::Proposed),
-            actual: Some(state),
-        });
-    }
+pub fn finalize(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    app: InterchainGov,
+    prop_id: ProposalId,
+) -> AdapterResult {
+    // State is already finalized after receiving the final proposal.
 
     let target_module = this_module(&app)?;
-    let callback = CallbackInfo::new(FINALIZE_CALLBACK_ID, None);
 
-    let external_members = load_external_members(deps.storage, &env)?;
-    let finalize_messages = external_members.iter().map(|host| {
-        let ibc_client = app.ibc_client(deps.as_ref());
-        let msg = ibc_client.module_ibc_action(host.to_string(), target_module.clone(), &InterchainGovIbcMsg::FinalizeProposal {
-            prop_hash: prop_id.clone(),
-            chain: host.clone(),
-        }, Some(callback.clone()))?;
+    let external_members = MEMBERS_STATE_SYNC.external_members(deps.storage, &env)?;
 
-        REMOTE_PROPOSAL_STATE.save(deps.storage, (prop_id.clone(), host), &DataState::Proposed)?;
-
-        Ok(msg)
-    }).collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
-
-
-    Ok(app.response("finalize").add_attribute("prop_id", prop_id).add_messages(finalize_messages))
-}
-
-/// TODO
-fn invite_member(
-    deps: DepsMut,
-    app: InterchainGov,
-    new_member: ChainName
-) -> AdapterResult {
-
-    todo!();
-    // TODO: auth
-
-    // check whether member is in the list
-    let mut members= MEMBERS.load(deps.storage)?;
-    let members_state = get_item_state(deps.storage, &MEMBERS)?;
-
-    ensure_eq!(members_state, DataState::Finalized, InterchainGovError::DataNotFinalized {
-        key: "members".to_string(),
-        state: members_state
-    });
-
-    // check that all our other chains have been finalized?
-
-
-
-    // Now that there's a new member, check that they're in the list of proxies
-    let ibc_host_addr = app.ibc_host(deps.as_ref())?;
-
-    if IBC_INFRA.query(&deps.querier, ibc_host_addr.clone(), &new_member)?.is_none() {
-        return Err(InterchainGovError::UnknownRemoteHost {
-            host: new_member.to_string(),
-        })
-    };
-    // Add the new member, updating status to Proposed
-    members.members.push(new_member.clone());
-
-    propose_item_state(deps.storage, &MEMBERS, members.clone())?;
+    // set outstanding acks
+    PROPOSAL_STATE_SYNC
+        .set_outstanding_finalization_acks(deps.storage, external_members.members.clone())?;
 
     let ibc_client = app.ibc_client(deps.as_ref());
-    let target_module = this_module(&app)?;
+    let finalize_messages = external_members
+        .members
+        .iter()
+        .map(|host| {
+            let callback = CallbackInfo::new(
+                FINALIZE_CALLBACK_ID,
+                Some(to_json_binary(
+                    &InterchainGovIbcCallbackMsg::FinalizeProposal {
+                        prop_hash: prop_id.clone(),
+                        proposed_to: host.clone(),
+                    },
+                )?),
+            );
+            let msg = ibc_client.module_ibc_action(
+                host.to_string(),
+                target_module.clone(),
+                &InterchainGovIbcMsg::FinalizeProposal {
+                    prop_hash: prop_id.clone(),
+                },
+                Some(callback.clone()),
+            )?;
 
-    // let ibc_register_msg = ibc_client.module_ibc_action(new_members.to_string(), target_module, &InterchainGovIbcMsg::SyncState {
-    //     key: "members".to_string(),
-    //     value: to_json_binary(members.members)?
-    // }, None)?;
+            Ok(msg)
+        })
+        .collect::<AbstractSdkResult<Vec<CosmosMsg>>>()?;
 
-    let ibc_register_msg = ibc_client.module_ibc_action(new_member.to_string(), target_module, &InterchainGovIbcMsg::UpdateMembers {
-        members: members.members.clone(),
-    }, None)?;
-
-    Ok(app.response("update_members").add_message(ibc_register_msg))
+    Ok(app
+        .response("finalize")
+        .add_attribute("prop_id", prop_id)
+        .add_messages(finalize_messages))
 }
+
 
 fn this_module(app: &InterchainGov) -> AbstractResult<ModuleInfo> {
     ModuleInfo::from_id(app.module_id(), app.version().into())

@@ -1,15 +1,20 @@
-use crate::contract::InterchainGov;
+use crate::{
+    contract::InterchainGov,
+    state::{Members},
+};
 
 use abstract_adapter::objects::chain_name::ChainName;
 use cosmwasm_schema::QueryResponses;
+use ibc_sync_state::{DataState, StateChange};
 
 // This is used for type safety and re-exporting the contract endpoint structs.
 abstract_adapter::adapter_msg_types!(InterchainGov, InterchainGovExecuteMsg, InterchainGovQueryMsg);
-use crate::state::{DataState, Governance, GovernanceVote, Proposal, ProposalId, ProposalMsg, Vote};
+use crate::state::{Governance, GovernanceVote, Proposal, ProposalId, ProposalMsg, Vote};
 
 /// App instantiate message
 #[cosmwasm_schema::cw_serde]
 pub struct InterchainGovInstantiateMsg {
+    pub accept_proposal_from_gov: Members,
 }
 
 /// App execute messages
@@ -25,7 +30,7 @@ pub enum InterchainGovExecuteMsg {
     Finalize {
         prop_id: ProposalId,
     },
-    /// Finalize the proposal state
+    /// Execute the proposal state
     #[fn_name("execute_proposal")]
     Execute {
         prop_id: ProposalId,
@@ -41,15 +46,17 @@ pub enum InterchainGovExecuteMsg {
         prop_id: String,
     },
     RequestGovVoteDetails {
+        prop_id: String
+    },
+    SetAcceptGovInvite {
+        /// only accept invites for groups with these members
+        members: Members,
+    },
+    TallyProposal {
         prop_id: String,
     },
-    // TODO: remove, just propose state change
-    InviteMember {
-        member: ChainName
-    },
-    /// Temporaryy override
     TestAddMembers {
-        members: Vec<ChainName>
+        members: Members
     },
     TemporaryRegisterRemoteGovModuleAddrs {
         modules: Vec<(ChainName, String)>
@@ -61,8 +68,10 @@ pub struct InterchainGovMigrateMsg {}
 
 #[cosmwasm_schema::cw_serde]
 pub enum InterchainGovIbcMsg {
-    UpdateMembers {
-        members: Vec<ChainName>
+    /// Called when this contract is being asked to join a Government
+    JoinGov {
+        // All the members in the governance (including this chain)
+        members: Members,
     },
     ProposeProposal {
         prop_hash: String,
@@ -72,23 +81,24 @@ pub enum InterchainGovIbcMsg {
     },
     FinalizeProposal {
         prop_hash: String,
-        /// information used to identify the recipient in the callback
-        chain: ChainName,
-    }
-    // SyncState {
-    //     key: String
-    //     value: Binary
-    // }
+    },
 }
 
-// #[non_exhaustive]
-// #[cosmwasm_schema::cw_serde]
-// pub enum InterchainGovIbcCallbackMsg {
-//     ProposedProposal {
-//         prop_hash: String,
-//         chain: ChainName
-//     }
-// }
+#[non_exhaustive]
+#[cosmwasm_schema::cw_serde]
+pub enum InterchainGovIbcCallbackMsg {
+    JoinGov {
+        proposed_to: ChainName,
+    },
+    FinalizeProposal {
+        prop_hash: String,
+        proposed_to: ChainName,
+    },
+    ProposeProposal {
+        prop_hash: String,
+        proposed_to: ChainName,
+    },
+}
 
 /// App query messages
 #[cosmwasm_schema::cw_serde]
@@ -102,11 +112,16 @@ pub enum InterchainGovQueryMsg {
     // #[returns(PendingProposalStates)]
     // PendingProposals {},
     #[returns(ProposalsResponse)]
+    Proposals { proposal_ids: Vec<ProposalId> },
+    #[returns(ProposalsResponse)]
     ListProposals {},
+    #[returns(ProposalStateResponse)]
+    ListProposalStates {},
+
     #[returns(ProposalResponse)]
-    Proposal {
-        prop_id: ProposalId,
-    },
+    Proposal { prop_id: ProposalId },
+    #[returns(Option<MapState>)]
+    ProposalState { prop_id: ProposalId },
     /// Get the local vote
     #[returns(VoteResponse)]
     Vote {
@@ -118,6 +133,7 @@ pub enum InterchainGovQueryMsg {
     VoteResults {
         prop_id: ProposalId,
     },
+
 }
 
 /// App sudo messages
@@ -135,20 +151,32 @@ pub struct ConfigResponse {}
 
 #[cosmwasm_schema::cw_serde]
 pub struct MembersResponse {
-    pub members: Vec<ChainName>,
-    pub state: DataState,
+    pub members: Members,
 }
 
 #[cosmwasm_schema::cw_serde]
 pub struct ProposalsResponse {
-    pub proposals: Vec<ProposalResponse>
+    pub proposals: Vec<ProposalResponse>,
 }
 
 #[cosmwasm_schema::cw_serde]
 pub struct ProposalResponse {
     pub prop_id: ProposalId,
     pub prop: Proposal,
+    pub state: Option<DataState>,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct ProposalStateResponse {
+    pub state: Vec<MapState>,
+}
+
+#[cosmwasm_schema::cw_serde]
+pub struct MapState {
+    pub namespace: String,
+    pub proposal_id: String,
     pub state: DataState,
+    pub change: StateChange,
 }
 
 #[cosmwasm_schema::cw_serde]

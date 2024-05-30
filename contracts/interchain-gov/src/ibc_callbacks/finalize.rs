@@ -1,82 +1,52 @@
 use abstract_adapter::sdk::AbstractResponse;
 use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
-use cosmwasm_std::{DepsMut, Env, from_json, MessageInfo, Order, StdResult};
+use cosmwasm_std::{from_json, DepsMut, Env, MessageInfo};
 
 use crate::contract::{AdapterResult, InterchainGov};
+use crate::msg::InterchainGovIbcCallbackMsg;
+use crate::state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC};
 use crate::InterchainGovError;
-use crate::msg::InterchainGovIbcMsg;
-use crate::state::{DataState, Proposal, PROPOSALS, REMOTE_PROPOSAL_STATE};
 
 /// Get a callback when a proposal is finalized
 /// TODO: figure out how to abstract this state transition
 pub fn finalize_callback(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     app: InterchainGov,
     ibc_msg: IbcResponseMsg,
 ) -> AdapterResult {
-
     println!("finalize_callback");
-
-    match ibc_msg.result {
-        CallbackResult::Execute { initiator_msg, result } => {
-            let initiator_msg: InterchainGovIbcMsg = from_json(initiator_msg)?;
-            match initiator_msg {
-                InterchainGovIbcMsg::FinalizeProposal {
-                    prop_hash: prop_id,
-                    chain,
-                    ..
+    match ibc_msg {
+        IbcResponseMsg {
+            id: _,
+            msg: Some(callback_msg),
+            result: CallbackResult::Execute { result: Ok(_), .. },
+        } => {
+            let callback_msg: InterchainGovIbcCallbackMsg = from_json(callback_msg)?;
+            match callback_msg {
+                InterchainGovIbcCallbackMsg::FinalizeProposal {
+                    proposed_to,
+                    prop_hash: _prop_id,
                 } => {
-                    println!("Finalizing proposal: {:?}", prop_id);
-                    if ibc_msg.msg.is_some() {
-                        println!("Unknown callback message");
-                        return Err(InterchainGovError::UnknownCallbackMessage(ibc_msg.id))
-                    }
+                    PROPOSAL_STATE_SYNC.apply_ack(deps.storage, proposed_to)?;
 
-                    // Ensure that it was proposed
-                    let prev_state = REMOTE_PROPOSAL_STATE.may_load(deps.storage, (prop_id.clone(), &chain))?;
-                    if prev_state.clone().map_or(true, |state| !state.is_proposed()) {
-                        println!("Invalid proposal state: {:?}", prev_state.clone());
-                        return Err(InterchainGovError::InvalidProposalState {
-                            prop_id: prop_id.clone(),
-                            chain: chain.clone(),
-                            expected: Some(DataState::Proposed),
-                            actual: prev_state.clone(),
-                        })
-                    }
-
-                    // Remove the pending state
-                    REMOTE_PROPOSAL_STATE.remove(deps.storage, (prop_id.clone(), &chain));
-
-                    // If we have no more pending states, we can update the proposal state to proposed
-                    let prop_states = REMOTE_PROPOSAL_STATE.prefix(prop_id.clone()).keys(deps.storage, None, None, Order::Ascending).take(1).collect::<StdResult<Vec<_>>>()?;
-                    if prop_states.is_empty() {
-                        PROPOSALS.update(deps.storage, prop_id.clone(), |prop| -> Result<(Proposal, DataState), InterchainGovError> {
-                            println!("Updating proposal state to finalized");
-                            match prop {
-                                Some((prop, _)) => {
-                                    Ok((prop, DataState::Finalized))
-                                },
-                                None => Err(InterchainGovError::ProposalNotFound(prop_id.clone()))
-                            }
-                        })?;
-                    } else {
-                        println!("Still pending states: {:?}", prop_states);
+                    if !PROPOSAL_STATE_SYNC.has_outstanding_acks(deps.storage)? {
+                        // finalize my proposal
+                        MEMBERS_STATE_SYNC.finalize_members(deps.storage, None)?;
                     }
                 }
-                // Wrong initiator message
-                _ => unimplemented!()
+                // Wrong callback message
+                _ => unimplemented!(),
             }
-        },
-        CallbackResult::Query { .. } => {
-            // TODO: proper error
-            unreachable!("finalize_callback")
-        },
-        CallbackResult::FatalError(_) => {
-            println!("Fatal error");
-            return Err(InterchainGovError::IbcFailed(ibc_msg));
         }
+        IbcResponseMsg {
+            result: CallbackResult::Execute { result: Err(e), .. },
+            ..
+        } => {
+            return Err(InterchainGovError::IbcFailed(e));
+        }
+        _ => panic!("{:?}", ibc_msg),
     }
 
     println!("finalize_callback done");
