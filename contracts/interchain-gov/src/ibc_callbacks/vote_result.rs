@@ -3,7 +3,7 @@ use abstract_adapter::std::ibc::{CallbackResult, IbcResponseMsg};
 use cosmwasm_std::{from_json, to_json_string, DepsMut, Env, MessageInfo, QueryRequest, WasmQuery};
 
 use crate::contract::{AdapterResult, InterchainGov};
-use crate::msg::{InterchainGovQueryMsg, VoteResponse};
+use crate::msg::{InterchainGovQueryMsg, QueryMsg, VoteResponse};
 use crate::state::{GovernanceVote, VOTE_RESULTS};
 use crate::InterchainGovError;
 
@@ -30,9 +30,9 @@ pub fn vote_result_callback(
             let prop_id = match query {
                 QueryRequest::Wasm(wasm) => match wasm {
                     WasmQuery::Smart { contract_addr, msg } => {
-                        let msg: InterchainGovQueryMsg = from_json(msg)?;
+                        let msg: QueryMsg = from_json(msg)?;
                         match msg {
-                            InterchainGovQueryMsg::Vote { prop_id } => prop_id,
+                            QueryMsg::Module(InterchainGovQueryMsg::Vote { prop_id }) => prop_id,
                             _ => unimplemented!("InterchainGovQueryMsg"),
                         }
                     }

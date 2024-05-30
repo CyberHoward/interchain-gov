@@ -609,14 +609,10 @@ mod members {
         let res = interchain.wait_ibc(A_CHAIN_ID, res)?;
         dbg!(&res.packets[0].outcome);
 
-        // a_gov.execute_proposal(prop_id.clone())?;
+        a_gov.execute_proposal(prop_id.clone())?;
 
         let a_members = dbg!(a_gov.members()?);
         assert_eq!(a_members.members.members.len(), 3);
-        // let b_members = dbg!(b_gov.members()?);
-        // assert_eq!(b_members.members.members.len(), 3);
-        // let c_members = dbg!(c_gov.members()?);
-        // assert_eq!(c_members.members.members.len(), 3);
         Ok(())
     }
 }

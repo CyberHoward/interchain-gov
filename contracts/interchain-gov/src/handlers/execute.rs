@@ -245,9 +245,9 @@ fn request_vote_results(
                 host.to_string(),
                 WasmQuery::Smart {
                     contract_addr: module_addr,
-                    msg: to_json_binary(&InterchainGovQueryMsg::Vote {
+                    msg: to_json_binary(&crate::msg::QueryMsg::Module(InterchainGovQueryMsg::Vote {
                         prop_id: prop_id.clone(),
-                    })?,
+                    }))?,
                 },
                 CallbackInfo::new(REGISTER_VOTE_ID, None),
             )?;
