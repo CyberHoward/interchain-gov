@@ -56,7 +56,7 @@ impl<Env: CwEnv> TestEnv<Env> {
         publisher.publish_adapter::<InterchainGovInstantiateMsg, InterchainGovInterface<_>>(
             InterchainGovInstantiateMsg {
                 accept_proposal_from_gov: Members {
-                    members: vec![ChainName::from_str(A_CHAIN_ID).unwrap(), ChainName::from_str(B_CHAIN_ID).unwrap()],
+                    members: vec![ChainName::from_chain_id(A_CHAIN_ID), ChainName::from_chain_id(B_CHAIN_ID)],
                 },
             },
         )?;
