@@ -42,7 +42,7 @@ pub fn module_ibc_handler(
             let allowed_gov = ALLOW_JOINING_GOV.load(deps.storage)?;
 
             // assert that the governance members are the whitelisted members
-            if members != allowed_gov {
+            if !members.members.iter().all(|a| allowed_gov.members.contains(a)) {
                 return Err(InterchainGovError::UnauthorizedIbcMessage {});
             }
 

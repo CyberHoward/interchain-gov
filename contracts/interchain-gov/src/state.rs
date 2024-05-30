@@ -165,9 +165,9 @@ pub mod members_sync_state {
             // Uses initialized / proposed state None
             members: Option<Members>,
         ) -> SyncStateResult<()> {
-            let members = {
+            let (members, set) = {
                 if let Some(members) = members {
-                    members
+                    (members, true)
                 } else {
                     let members: Result<Members, _> = match self.load_state_change(storage)? {
                         StateChange::Proposal(members) => Ok(from_json(&members)?),
@@ -176,14 +176,14 @@ pub mod members_sync_state {
                             state: "Backup".to_string(),
                         }),
                     };
-                    members?
+                    (members?, false)
                 }
             };
 
             self.members.save(storage, &members)?;
 
             self.item_state_controller
-                .finalize_item_state(storage, MEMBERS_KEY.to_string())?;
+                .finalize_item_state(storage, MEMBERS_KEY.to_string(), set)?;
             Ok(())
         }
 

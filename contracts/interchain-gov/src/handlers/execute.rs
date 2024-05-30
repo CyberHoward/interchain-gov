@@ -450,18 +450,20 @@ fn propose(
         )?;
         match prop.action {
             // If goal is to update members, send an IBC packet to members to update their state
-            ProposalAction::UpdateMembers { members } => {
+            ProposalAction::UpdateMembers { mut members } => {
                 MEMBERS_STATE_SYNC.initiate_members(deps.storage, &env, members.clone())?;
                 // send msgs to new members
-
                 let ibc_client = app.ibc_client(deps.as_ref());
                 let exec_msg = InterchainGovIbcMsg::JoinGov {
                     members: members.clone(),
                 };
 
+                // filter out self
+                members.members.retain(|c| c != &ChainName::new(&env));
+
                 let mut msgs = vec![];
                 let target_module = this_module(&app)?;
-                for host in external_members.members.iter() {
+                for host in members.members.iter() {
                     let callback = CallbackInfo::new(
                         PROPOSE_CALLBACK_ID,
                         Some(to_json_binary(&InterchainGovIbcCallbackMsg::JoinGov {
@@ -475,6 +477,7 @@ fn propose(
                         Some(callback.clone()),
                     )?);
                 }
+
                 return Ok(app
                     .response("propose_members")
                     .add_messages(msgs)

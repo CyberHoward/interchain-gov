@@ -1,7 +1,7 @@
 use crate::{
     contract::{AdapterResult, InterchainGov},
     msg::{ConfigResponse, InterchainGovQueryMsg, MapState, ProposalStateResponse},
-    state::PROPOSAL_STATE_SYNC,
+    state::{MEMBERS_STATE_SYNC, PROPOSAL_STATE_SYNC},
 };
 use abstract_adapter::objects::chain_name::ChainName;
 
@@ -131,8 +131,8 @@ fn query_proposal(deps: Deps, prop_id: ProposalId) -> AdapterResult<ProposalResp
 }
 
 fn query_members(deps: Deps) -> AdapterResult<MembersResponse> {
-    let members = MEMBERS.load(deps.storage)?;
-    // TODO: fix
+    let members = MEMBERS_STATE_SYNC.load_members(deps.storage)?;
+
     Ok(MembersResponse { members })
 }
 
